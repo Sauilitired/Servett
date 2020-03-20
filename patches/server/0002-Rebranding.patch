@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Fri, 20 Mar 2020 22:02:20 +0100
+Subject: [PATCH] Rebranding
+
+
+diff --git a/pom.xml b/pom.xml
+index 332a8a45eb8ecd9d1e44fb20cab91d327c065998..c1312f31f781eb971eb8a3691e3caeef07ec72b5 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1,11 +1,11 @@
+  <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+     <modelVersion>4.0.0</modelVersion>
+-    <artifactId>tuinity</artifactId>
++    <artifactIdy>servett</artifactId>
+     <packaging>jar</packaging>
+     <version>1.15.2-R0.1-SNAPSHOT</version>
+-    <name>Tuinity-Server</name>
+-    <url>https://github.com/Spottedleaf/Tuinity</url>
++    <name>Servett-Server</name>
++    <url>https://github.com/Sauilitired/byof</url>
+     <properties>
+         <!-- <skipTests>true</skipTests> Paper - This [was] not going to end well -->
+         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+@@ -20,16 +20,16 @@
+     </properties>
+ 
+     <parent>
+-        <groupId>com.tuinity</groupId>
+-        <artifactId>tuinity-parent</artifactId>
++        <groupId>com.hegemonyrpg</groupId>
++        <artifactId>servett-parent</artifactId>
+         <version>dev-SNAPSHOT</version>
+         <relativePath>../pom.xml</relativePath>
+     </parent>
+ 
+     <dependencies>
+         <dependency>
+-            <groupId>com.tuinity</groupId>
+-            <artifactId>tuinity-api</artifactId>
++            <groupId>com.hegemonyrpg</groupId>
++            <artifactId>servett-api</artifactId>
+             <version>${project.version}</version>
+             <scope>compile</scope>
+         </dependency>
+-- 
+2.20.1
+

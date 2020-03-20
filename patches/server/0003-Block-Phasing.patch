@@ -1,23 +1,1545 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
-Date: Wed, 4 Mar 2020 14:25:44 +0100
-Subject: [PATCH] Block phasing for simple events
+Date: Fri, 20 Mar 2020 22:23:56 +0100
+Subject: [PATCH] Block Phasing
 
 
-diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index 3f5a1d4f32abccd32761285c0d749393e78f243a..794386c194d61bce88f8d67ffe32b8cf4847b38a 100644
---- a/src/main/java/net/minecraft/server/EntityPlayer.java
-+++ b/src/main/java/net/minecraft/server/EntityPlayer.java
-@@ -387,7 +387,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
-     public void tick() {
-         synchronized (world.tickingPlayerLock) { // Servett Start
-             world.tickingPlayer = this; // Servett
--            tickingPlayerLock = this; // Servett
-+            tickingPlayer = this; // Servett
+diff --git a/src/main/java/net/minecraft/server/BlockAccessAir.java b/src/main/java/net/minecraft/server/BlockAccessAir.java
+index 30cbfc8eac20910aa55951e3dce63862f5a43c37..18e8d7182e4cf46d1e31abdeae33efca96bb7cb5 100644
+--- a/src/main/java/net/minecraft/server/BlockAccessAir.java
++++ b/src/main/java/net/minecraft/server/BlockAccessAir.java
+@@ -35,4 +35,11 @@ public enum BlockAccessAir implements IBlockAccess {
+     public Fluid getFluid(BlockPosition blockposition) {
+         return FluidTypes.EMPTY.h();
+     }
++
++    // Servett Start
++    @Override public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
++        return getType(position);
++    }
++    // Servett End
++
+ }
+diff --git a/src/main/java/net/minecraft/server/BlockPosition.java b/src/main/java/net/minecraft/server/BlockPosition.java
+index 83c5c83292546d76e249b40d24f706c6323ddb3e..a295a8b4ffae7f419aa8148e5b1a642e80290017 100644
+--- a/src/main/java/net/minecraft/server/BlockPosition.java
++++ b/src/main/java/net/minecraft/server/BlockPosition.java
+@@ -4,6 +4,10 @@ import com.google.common.collect.AbstractIterator;
+ import com.google.common.collect.Lists;
+ import com.mojang.datafixers.Dynamic;
+ import com.mojang.datafixers.types.DynamicOps;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import javax.annotation.concurrent.Immutable;
+ import java.util.List;
+ import java.util.Spliterator.OfInt;
+ import java.util.Spliterators.AbstractSpliterator;
+@@ -11,9 +15,6 @@ import java.util.function.Consumer;
+ import java.util.stream.IntStream;
+ import java.util.stream.Stream;
+ import java.util.stream.StreamSupport;
+-import javax.annotation.concurrent.Immutable;
+-import org.apache.logging.log4j.LogManager;
+-import org.apache.logging.log4j.Logger;
+ 
+ @Immutable
+ public class BlockPosition extends BaseBlockPosition implements MinecraftSerializable {
+@@ -99,6 +100,13 @@ public class BlockPosition extends BaseBlockPosition implements MinecraftSeriali
+         return new BlockPosition(b(i), c(i), d(i));
+     }
+ 
++    // Servett Start
++    // Obfuscation Helper
++    public static long at(int x, int y, int z) {
++        return a(x, y, z);
++    }
++    // Servett End
++
+     public static long a(int i, int j, int k) {
+         long l = 0L;
+ 
+diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
+index 4b0e3e90539159ab10dd1b35dc39cc6b8c4e86f7..ba5f27595d20dfb954e52f40d468ba3b6918e100 100644
+--- a/src/main/java/net/minecraft/server/Chunk.java
++++ b/src/main/java/net/minecraft/server/Chunk.java
+@@ -7,30 +7,37 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import it.unimi.dsi.fastutil.shorts.ShortList;
+ import it.unimi.dsi.fastutil.shorts.ShortListIterator;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import javax.annotation.Nullable;
+ import java.util.Collection;
+ import java.util.Collections;
+ import java.util.Iterator;
+ import java.util.List;
+ import java.util.Map;
+-import java.util.Set;
+ import java.util.Map.Entry;
++import java.util.Set;
+ import java.util.function.Consumer;
+ import java.util.function.Predicate;
+ import java.util.function.Supplier;
+ import java.util.stream.Stream;
+ import java.util.stream.StreamSupport;
+-import javax.annotation.Nullable;
+-import org.apache.logging.log4j.LogManager;
+-import org.apache.logging.log4j.Logger;
+ 
+ public class Chunk implements IChunkAccess {
+ 
+     private static final Logger LOGGER = LogManager.getLogger();
+-    public static final ChunkSection a = null; public static final ChunkSection EMPTY_CHUNK_SECTION = Chunk.a; // Paper - OBFHELPER
++    public static final ChunkSection a = null;
++    public static final ChunkSection EMPTY_CHUNK_SECTION = Chunk.a; // Paper - OBFHELPER
+     private final ChunkSection[] sections;
+     private BiomeStorage d;
+     private final Map<BlockPosition, NBTTagCompound> e;
+-    public boolean loaded; public boolean isLoaded() { return loaded; } // Paper - OBFHELPER
++    public boolean loaded;
++
++    public boolean isLoaded() {
++        return loaded;
++    } // Paper - OBFHELPER
++
+     public final World world;
+     public final Map<HeightMap.Type, HeightMap> heightMap;
+     private final ChunkConverter i;
+@@ -45,25 +52,27 @@ public class Chunk implements IChunkAccess {
+     public long lastSaved; // Paper
+     private volatile boolean s;
+     private long inhabitedTime;
+-    @Nullable
+-    private Supplier<PlayerChunk.State> u;
+-    @Nullable
+-    private Consumer<Chunk> v;
+-    private final ChunkCoordIntPair loc; public final long coordinateKey; // Paper - cache coordinate key
++    @Nullable private Supplier<PlayerChunk.State> u;
++    @Nullable private Consumer<Chunk> v;
++    private final ChunkCoordIntPair loc;
++    public final long coordinateKey; // Paper - cache coordinate key
+     private volatile boolean x;
+ 
+-    final com.destroystokyo.paper.util.maplist.IBlockDataList tickingList = new com.destroystokyo.paper.util.maplist.IBlockDataList(); // Paper
++    final com.destroystokyo.paper.util.maplist.IBlockDataList tickingList =
++        new com.destroystokyo.paper.util.maplist.IBlockDataList(); // Paper
+ 
+     public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage) {
+-        this(world, chunkcoordintpair, biomestorage, ChunkConverter.a, TickListEmpty.b(), TickListEmpty.b(), 0L, (ChunkSection[]) null, (Consumer) null);
++        this(world, chunkcoordintpair, biomestorage, ChunkConverter.a, TickListEmpty.b(),
++            TickListEmpty.b(), 0L, (ChunkSection[]) null, (Consumer) null);
+     }
+ 
+     // Paper start
+     public final co.aikar.util.Counter<String> entityCounts = new co.aikar.util.Counter<>();
+     public final co.aikar.util.Counter<String> tileEntityCounts = new co.aikar.util.Counter<>();
++
++
+     private class TileEntityHashMap extends java.util.HashMap<BlockPosition, TileEntity> {
+-        @Override
+-        public TileEntity put(BlockPosition key, TileEntity value) {
++        @Override public TileEntity put(BlockPosition key, TileEntity value) {
+             TileEntity replaced = super.put(key, value);
+             if (replaced != null) {
+                 replaced.setCurrentChunk(null);
+@@ -76,8 +85,7 @@ public class Chunk implements IChunkAccess {
+             return replaced;
+         }
+ 
+-        @Override
+-        public TileEntity remove(Object key) {
++        @Override public TileEntity remove(Object key) {
+             TileEntity removed = super.remove(key);
+             if (removed != null) {
+                 removed.setCurrentChunk(null);
+@@ -86,13 +94,17 @@ public class Chunk implements IChunkAccess {
+             return removed;
+         }
+     }
++
++
+     // Track the number of minecarts and items
+     // Keep this synced with entitySlices.add() and entitySlices.remove()
+     private final int[] itemCounts = new int[16];
+     private final int[] inventoryEntityCounts = new int[16];
+     // Paper end
+ 
+-    public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage, ChunkConverter chunkconverter, TickList<Block> ticklist, TickList<FluidType> ticklist1, long i, @Nullable ChunkSection[] achunksection, @Nullable Consumer<Chunk> consumer) {
++    public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage,
++        ChunkConverter chunkconverter, TickList<Block> ticklist, TickList<FluidType> ticklist1,
++        long i, @Nullable ChunkSection[] achunksection, @Nullable Consumer<Chunk> consumer) {
+         this.sections = new ChunkSection[16];
+         this.e = Maps.newHashMap();
+         this.heightMap = Maps.newEnumMap(HeightMap.Type.class);
+@@ -102,7 +114,9 @@ public class Chunk implements IChunkAccess {
+         this.n = new ShortList[16];
+         this.entitySlices = (List[]) (new List[16]); // Spigot
+         this.world = world;
+-        this.loc = chunkcoordintpair; this.coordinateKey = MCUtil.getCoordinateKey(chunkcoordintpair); // Paper - cache coordinate key
++        this.loc = chunkcoordintpair;
++        this.coordinateKey =
++            MCUtil.getCoordinateKey(chunkcoordintpair); // Paper - cache coordinate key
+         this.i = chunkconverter;
+         HeightMap.Type[] aheightmap_type = HeightMap.Type.values();
+         int j = aheightmap_type.length;
+@@ -130,17 +144,24 @@ public class Chunk implements IChunkAccess {
+                 for (ChunkSection section : achunksection) {
+                     if (section != null) {
+                         section.chunk = this;
+-                        int offset = com.destroystokyo.paper.util.maplist.IBlockDataList.getLocationKey(0, section.yPos, 0);
+-                        for (it.unimi.dsi.fastutil.longs.LongIterator iterator = section.tickingList.getRawIterator(); iterator.hasNext();) {
++                        int offset = com.destroystokyo.paper.util.maplist.IBlockDataList
++                            .getLocationKey(0, section.yPos, 0);
++                        for (it.unimi.dsi.fastutil.longs.LongIterator iterator =
++                             section.tickingList.getRawIterator(); iterator.hasNext(); ) {
+                             long raw = iterator.nextLong();
+-                            this.tickingList.add(com.destroystokyo.paper.util.maplist.IBlockDataList.getLocationFromRaw(raw) + offset, com.destroystokyo.paper.util.maplist.IBlockDataList.getBlockDataFromRaw(raw));
++                            this.tickingList.add(com.destroystokyo.paper.util.maplist.IBlockDataList
++                                    .getLocationFromRaw(raw) + offset,
++                                com.destroystokyo.paper.util.maplist.IBlockDataList
++                                    .getBlockDataFromRaw(raw));
+                         }
+                     }
+                 }
+                 // Paper end
+                 System.arraycopy(achunksection, 0, this.sections, 0, this.sections.length);
+             } else {
+-                Chunk.LOGGER.warn("Could not set level chunk sections, array length is {} instead of {}", achunksection.length, this.sections.length);
++                Chunk.LOGGER
++                    .warn("Could not set level chunk sections, array length is {} instead of {}",
++                        achunksection.length, this.sections.length);
+             }
+         }
+ 
+@@ -149,6 +170,7 @@ public class Chunk implements IChunkAccess {
+     }
+ 
+     public org.bukkit.Chunk bukkitChunk;
++
+     public org.bukkit.Chunk getBukkitChunk() {
+         return bukkitChunk;
+     }
+@@ -158,7 +180,8 @@ public class Chunk implements IChunkAccess {
+     // CraftBukkit end
+ 
+     // Paper start
+-    public final com.destroystokyo.paper.util.maplist.EntityList entities = new com.destroystokyo.paper.util.maplist.EntityList();
++    public final com.destroystokyo.paper.util.maplist.EntityList entities =
++        new com.destroystokyo.paper.util.maplist.EntityList();
+     public PlayerChunk playerChunk;
+     // Paper end
+ 
+@@ -175,12 +198,14 @@ public class Chunk implements IChunkAccess {
+     boolean loadedTicketLevel;
+ 
+     private long neighbourChunksLoadedBitset;
+-    private final Chunk[] loadedNeighbourChunks = new Chunk[(NEIGHBOUR_CACHE_RADIUS * 2 + 1) * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)];
++    private final Chunk[] loadedNeighbourChunks =
++        new Chunk[(NEIGHBOUR_CACHE_RADIUS * 2 + 1) * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)];
+ 
+     private static int getNeighbourIndex(final int relativeX, final int relativeZ) {
+         // index = (relativeX + NEIGHBOUR_CACHE_RADIUS) + (relativeZ + NEIGHBOUR_CACHE_RADIUS) * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)
+         // optimised variant of the above by moving some of the ops to compile time
+-        return relativeX + (relativeZ * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)) + (NEIGHBOUR_CACHE_RADIUS + NEIGHBOUR_CACHE_RADIUS * ((NEIGHBOUR_CACHE_RADIUS * 2 + 1)));
++        return relativeX + (relativeZ * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)) + (NEIGHBOUR_CACHE_RADIUS
++            + NEIGHBOUR_CACHE_RADIUS * ((NEIGHBOUR_CACHE_RADIUS * 2 + 1)));
+     }
+ 
+     public final Chunk getRelativeNeighbourIfLoaded(final int relativeX, final int relativeZ) {
+@@ -188,12 +213,16 @@ public class Chunk implements IChunkAccess {
+     }
+ 
+     public final boolean isNeighbourLoaded(final int relativeX, final int relativeZ) {
+-        return (this.neighbourChunksLoadedBitset & (1L << getNeighbourIndex(relativeX, relativeZ))) != 0;
++        return (this.neighbourChunksLoadedBitset & (1L << getNeighbourIndex(relativeX, relativeZ)))
++            != 0;
+     }
+ 
+-    public final void setNeighbourLoaded(final int relativeX, final int relativeZ, final Chunk chunk) {
++    public final void setNeighbourLoaded(final int relativeX, final int relativeZ,
++        final Chunk chunk) {
+         if (chunk == null) {
+-            throw new IllegalArgumentException("Chunk must be non-null, neighbour: (" + relativeX + "," + relativeZ + "), chunk: " + this.loc);
++            throw new IllegalArgumentException(
++                "Chunk must be non-null, neighbour: (" + relativeX + "," + relativeZ + "), chunk: "
++                    + this.loc);
+         }
+         final int index = getNeighbourIndex(relativeX, relativeZ);
+         this.loadedNeighbourChunks[index] = chunk;
+@@ -251,7 +280,9 @@ public class Chunk implements IChunkAccess {
+     // Tuinity end
+ 
+     public Chunk(World world, ProtoChunk protochunk) {
+-        this(world, protochunk.getPos(), protochunk.getBiomeIndex(), protochunk.p(), protochunk.n(), protochunk.o(), protochunk.getInhabitedTime(), protochunk.getSections(), (Consumer) null);
++        this(world, protochunk.getPos(), protochunk.getBiomeIndex(), protochunk.p(), protochunk.n(),
++            protochunk.o(), protochunk.getInhabitedTime(), protochunk.getSections(),
++            (Consumer) null);
+         Iterator iterator = protochunk.y().iterator();
+ 
+         while (iterator.hasNext()) {
+@@ -294,33 +325,57 @@ public class Chunk implements IChunkAccess {
+         this.needsDecoration = true; // CraftBukkit
+     }
+ 
+-    @Override
+-    public HeightMap a(HeightMap.Type heightmap_type) {
++    @Override public HeightMap a(HeightMap.Type heightmap_type) {
+         return (HeightMap) this.heightMap.computeIfAbsent(heightmap_type, (heightmap_type1) -> {
+             return new HeightMap(this, heightmap_type1);
+         });
+     }
+ 
+-    @Override
+-    public Set<BlockPosition> c() {
++    @Override public Set<BlockPosition> c() {
+         Set<BlockPosition> set = Sets.newHashSet(this.e.keySet());
+ 
+         set.addAll(this.tileEntities.keySet());
+         return set;
+     }
+ 
+-    @Override
+-    public ChunkSection[] getSections() {
++    @Override public ChunkSection[] getSections() {
+         return this.sections;
+     }
+ 
+     // Paper start - Optimize getBlockData to reduce instructions
+-    public final IBlockData getBlockData(BlockPosition pos) { return getBlockData(pos.getX(), pos.getY(), pos.getZ()); } // Paper
++    public final IBlockData getBlockData(BlockPosition pos) {
++        return getBlockData(pos.getX(), pos.getY(), pos.getZ());
++    } // Paper
++
+     public IBlockData getType(BlockPosition blockposition) {
+         return this.getBlockData(blockposition.getX(), blockposition.getY(), blockposition.getZ());
+     }
+ 
+     public final IBlockData getBlockData(final int x, final int y, final int z) {
++        // Servett Start
++        try {
++            synchronized (world.tickingPlayerLock) {
++                if (world.tickingPlayer != null &&
++                    world.tickingPlayer.modifiedBlocks != null) {
++                    final PlayerBlockModification blockModification =
++                        world.tickingPlayer.modifiedBlocks.get(BlockPosition.at(x, y, z));
++                    if (blockModification != null) {
++                        return blockModification.getModifiedBlock();
++                    }
++                }
++            }
++        } catch (final Exception e) {
++            System.err.printf(
++                "FAILED TO READ PLAYER SPECIFIC BLOCK. TICKING PLAYER = %s. READING DEFAULT.\n",
++                world.tickingPlayer);
++            e.printStackTrace();
++        }
++        return getBlockDataInternal(x, y, z);
++        // Servett End
++    }
++
++    // Servett Start
++    public final IBlockData getBlockDataInternal(final int x, final int y, final int z) {
+         // Method body / logic copied from below
+         final int i = y >> 4;
+         if (y >= 0 && i < this.sections.length && this.sections[i] != null) {
+@@ -329,6 +384,7 @@ public class Chunk implements IChunkAccess {
+         }
+         return Blocks.AIR.getBlockData();
+     }
++    // Servett End
+ 
+     public IBlockData getBlockData_unused(int i, int j, int k) {
+         // Paper end
+@@ -357,7 +413,8 @@ public class Chunk implements IChunkAccess {
+                 return Blocks.AIR.getBlockData();
+             } catch (Throwable throwable) {
+                 CrashReport crashreport = CrashReport.a(throwable, "Getting block state");
+-                CrashReportSystemDetails crashreportsystemdetails = crashreport.a("Block being got");
++                CrashReportSystemDetails crashreportsystemdetails =
++                    crashreport.a("Block being got");
+ 
+                 crashreportsystemdetails.a("Location", () -> {
+                     return CrashReportSystemDetails.a(i, j, k);
+@@ -368,19 +425,16 @@ public class Chunk implements IChunkAccess {
+     }
+ 
+     // Paper start - If loaded util
+-    @Override
+-    public Fluid getFluidIfLoaded(BlockPosition blockposition) {
++    @Override public Fluid getFluidIfLoaded(BlockPosition blockposition) {
+         return this.getFluid(blockposition);
+     }
+ 
+-    @Override
+-    public IBlockData getTypeIfLoaded(BlockPosition blockposition) {
++    @Override public IBlockData getTypeIfLoaded(BlockPosition blockposition) {
+         return this.getType(blockposition);
+     }
+     // Paper end
+ 
+-    @Override
+-    public Fluid getFluid(BlockPosition blockposition) {
++    @Override public Fluid getFluid(BlockPosition blockposition) {
+         return this.a(blockposition.getX(), blockposition.getY(), blockposition.getZ());
+     }
+ 
+@@ -407,14 +461,14 @@ public class Chunk implements IChunkAccess {
+     }
+ 
+     // CraftBukkit start
+-    @Nullable
+-    @Override
+-    public IBlockData setType(BlockPosition blockposition, IBlockData iblockdata, boolean flag) {
++    @Nullable @Override public IBlockData setType(BlockPosition blockposition,
++        IBlockData iblockdata, boolean flag) {
+         return this.setType(blockposition, iblockdata, flag, true);
+     }
+ 
+     @Nullable
+-    public IBlockData setType(BlockPosition blockposition, IBlockData iblockdata, boolean flag, boolean doPlace) {
++    public IBlockData setType(BlockPosition blockposition, IBlockData iblockdata, boolean flag,
++        boolean doPlace) {
+         // CraftBukkit end
+         int i = blockposition.getX() & 15;
+         int j = blockposition.getY();
+@@ -426,7 +480,8 @@ public class Chunk implements IChunkAccess {
+                 return null;
+             }
+ 
+-            chunksection = new ChunkSection(j >> 4 << 4, this, this.world, true); // Paper - Anti-Xray
++            chunksection =
++                new ChunkSection(world, j >> 4 << 4, this, this.world, true); // Paper - Anti-Xray
+             this.sections[j >> 4] = chunksection;
+         }
+ 
+@@ -440,7 +495,8 @@ public class Chunk implements IChunkAccess {
+             Block block1 = iblockdata1.getBlock();
+ 
+             ((HeightMap) this.heightMap.get(HeightMap.Type.MOTION_BLOCKING)).a(i, j, k, iblockdata);
+-            ((HeightMap) this.heightMap.get(HeightMap.Type.MOTION_BLOCKING_NO_LEAVES)).a(i, j, k, iblockdata);
++            ((HeightMap) this.heightMap.get(HeightMap.Type.MOTION_BLOCKING_NO_LEAVES))
++                .a(i, j, k, iblockdata);
+             ((HeightMap) this.heightMap.get(HeightMap.Type.OCEAN_FLOOR)).a(i, j, k, iblockdata);
+             ((HeightMap) this.heightMap.get(HeightMap.Type.WORLD_SURFACE)).a(i, j, k, iblockdata);
+             boolean flag2 = chunksection.c();
+@@ -468,7 +524,8 @@ public class Chunk implements IChunkAccess {
+                 }
+ 
+                 // CraftBukkit - Don't place while processing the BlockPlaceEvent, unless it's a BlockContainer. Prevents blocks such as TNT from activating when cancelled.
+-                if (!this.world.isClientSide && doPlace && (!this.world.captureBlockStates || block instanceof BlockTileEntity)) {
++                if (!this.world.isClientSide && doPlace && (!this.world.captureBlockStates
++                    || block instanceof BlockTileEntity)) {
+                     iblockdata.onPlace(this.world, blockposition, iblockdata1, flag);
+                 }
+ 
+@@ -488,20 +545,19 @@ public class Chunk implements IChunkAccess {
+         }
+     }
+ 
+-    @Nullable
+-    public LightEngine e() {
++    @Nullable public LightEngine e() {
+         return this.world.getChunkProvider().getLightEngine();
+     }
+ 
+-    @Override
+-    public void a(Entity entity) {
++    @Override public void a(Entity entity) {
+         com.tuinity.tuinity.util.TickThread.softEnsureTickThread("Async addEntity call"); // Tuinity
+         this.q = true;
+         int i = MathHelper.floor(entity.locX() / 16.0D);
+         int j = MathHelper.floor(entity.locZ() / 16.0D);
+ 
+         if (i != this.loc.x || j != this.loc.z) {
+-            Chunk.LOGGER.warn("Wrong location! ({}, {}) should be ({}, {}), {}", i, j, this.loc.x, this.loc.z, entity);
++            Chunk.LOGGER.warn("Wrong location! ({}, {}) should be ({}, {}), {}", i, j, this.loc.x,
++                this.loc.z, entity);
+             entity.dead = true;
+             return; // Paper
+         }
+@@ -519,23 +575,29 @@ public class Chunk implements IChunkAccess {
+         List<Entity> nextSlice = this.entitySlices[k]; // the next list to be added to
+         List<Entity> currentSlice = entity.entitySlice;
+         if (nextSlice == currentSlice) {
+-            if (World.DEBUG_ENTITIES) MinecraftServer.LOGGER.warn("Entity was already in this chunk!" + entity, new Throwable());
++            if (World.DEBUG_ENTITIES)
++                MinecraftServer.LOGGER
++                    .warn("Entity was already in this chunk!" + entity, new Throwable());
+             return; // ??? silly plugins
+         }
+         if (currentSlice != null && currentSlice.contains(entity)) {
+             // Still in an old chunk...
+-            if (World.DEBUG_ENTITIES) MinecraftServer.LOGGER.warn("Entity is still in another chunk!" + entity, new Throwable());
++            if (World.DEBUG_ENTITIES)
++                MinecraftServer.LOGGER
++                    .warn("Entity is still in another chunk!" + entity, new Throwable());
+             Chunk chunk = entity.getCurrentChunk();
+             if (chunk != null) {
+                 chunk.removeEntity(entity);
+             } else {
+                 removeEntity(entity);
+             }
+-            currentSlice.remove(entity); // Just incase the above did not remove from the previous slice
++            currentSlice
++                .remove(entity); // Just incase the above did not remove from the previous slice
+         }
+         // Paper end
+ 
+-        if (!entity.inChunk || entity.getCurrentChunk() != this) entityCounts.increment(entity.getMinecraftKeyString()); // Paper
++        if (!entity.inChunk || entity.getCurrentChunk() != this)
++            entityCounts.increment(entity.getMinecraftKeyString()); // Paper
+         entity.inChunk = true;
+         entity.setCurrentChunk(this); // Paper
+         entity.chunkX = this.loc.x;
+@@ -554,18 +616,21 @@ public class Chunk implements IChunkAccess {
+         this.markDirty(); // Paper
+     }
+ 
+-    @Override
+-    public void a(HeightMap.Type heightmap_type, long[] along) {
++    @Override public void a(HeightMap.Type heightmap_type, long[] along) {
+         ((HeightMap) this.heightMap.get(heightmap_type)).a(along);
+     }
+ 
+-    public void removeEntity(Entity entity) { this.b(entity); } // Paper - OBFHELPER
++    public void removeEntity(Entity entity) {
++        this.b(entity);
++    } // Paper - OBFHELPER
++
+     public void b(Entity entity) {
+         this.a(entity, entity.chunkY);
+     }
+ 
+     public void a(Entity entity, int i) {
+-        com.tuinity.tuinity.util.TickThread.softEnsureTickThread("Async removeEntity call"); // Tuinity
++        com.tuinity.tuinity.util.TickThread
++            .softEnsureTickThread("Async removeEntity call"); // Tuinity
+         if (i < 0) {
+             i = 0;
+         }
+@@ -575,7 +640,8 @@ public class Chunk implements IChunkAccess {
+         }
+ 
+         // Paper start
+-        if (entity.currentChunk != null && entity.currentChunk.get() == this) entity.setCurrentChunk(null);
++        if (entity.currentChunk != null && entity.currentChunk.get() == this)
++            entity.setCurrentChunk(null);
+         if (entitySlices[i] == entity.entitySlice) {
+             entity.entitySlice = null;
+         }
+@@ -593,7 +659,10 @@ public class Chunk implements IChunkAccess {
+         this.entities.remove(entity); // Paper
+     }
+ 
+-    public int getHighestBlockY(HeightMap.Type heightmap_type, int i, int j) { return this.a(heightmap_type, i, j) + 1; } // Paper - sort of an obfhelper, but without -1
++    public int getHighestBlockY(HeightMap.Type heightmap_type, int i, int j) {
++        return this.a(heightmap_type, i, j) + 1;
++    } // Paper - sort of an obfhelper, but without -1
++
+     @Override public int a(HeightMap.Type heightmap_type, int i, int j) { // Paper
+         return ((HeightMap) this.heightMap.get(heightmap_type)).a(i & 15, j & 15) - 1;
+     }
+@@ -604,23 +673,23 @@ public class Chunk implements IChunkAccess {
+     }
+     // Tuinity end
+ 
+-    @Nullable
+-    private TileEntity j(BlockPosition blockposition) {
++    @Nullable private TileEntity j(BlockPosition blockposition) {
+         IBlockData iblockdata = this.getType(blockposition);
+         Block block = iblockdata.getBlock();
+ 
+         return !block.isTileEntity() ? null : ((ITileEntity) block).createTile(this.world);
+     }
+ 
+-    @Nullable
+-    @Override
+-    public TileEntity getTileEntity(BlockPosition blockposition) {
++    @Nullable @Override public TileEntity getTileEntity(BlockPosition blockposition) {
+         return this.a(blockposition, Chunk.EnumTileEntityState.CHECK);
+     }
+ 
+-    @Nullable public final TileEntity getTileEntityImmediately(BlockPosition pos) { return this.a(pos, EnumTileEntityState.IMMEDIATE); } // Paper - OBFHELPER
+-    @Nullable
+-    public TileEntity a(BlockPosition blockposition, Chunk.EnumTileEntityState chunk_enumtileentitystate) {
++    @Nullable public final TileEntity getTileEntityImmediately(BlockPosition pos) {
++        return this.a(pos, EnumTileEntityState.IMMEDIATE);
++    } // Paper - OBFHELPER
++
++    @Nullable public TileEntity a(BlockPosition blockposition,
++        Chunk.EnumTileEntityState chunk_enumtileentitystate) {
+         // CraftBukkit start
+         TileEntity tileentity = world.capturedTileEntities.get(blockposition);
+         if (tileentity == null) {
+@@ -661,12 +730,12 @@ public class Chunk implements IChunkAccess {
+ 
+     }
+ 
+-    @Override
+-    public void setTileEntity(BlockPosition blockposition, TileEntity tileentity) {
++    @Override public void setTileEntity(BlockPosition blockposition, TileEntity tileentity) {
+         if (this.getType(blockposition).getBlock() instanceof ITileEntity) {
+             tileentity.setLocation(this.world, blockposition);
+             tileentity.r();
+-            TileEntity tileentity1 = (TileEntity) this.tileEntities.put(blockposition.immutableCopy(), tileentity);
++            TileEntity tileentity1 =
++                (TileEntity) this.tileEntities.put(blockposition.immutableCopy(), tileentity);
+ 
+             if (tileentity1 != null && tileentity1 != tileentity) {
+                 tileentity1.ab_();
+@@ -674,16 +743,18 @@ public class Chunk implements IChunkAccess {
  
              // CraftBukkit start
-             if (this.joining) {
-@@ -647,7 +647,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+             // Paper start - Remove invalid mob spawner tile entities
+-        } else if (tileentity instanceof TileEntityMobSpawner && !(getBlockData(blockposition.getX(), blockposition.getY(), blockposition.getZ()).getBlock() instanceof BlockMobSpawner)) {
++        } else if (tileentity instanceof TileEntityMobSpawner && !(getBlockData(
++            blockposition.getX(), blockposition.getY(), blockposition.getZ())
++            .getBlock() instanceof BlockMobSpawner)) {
+             this.tileEntities.remove(blockposition);
+             // Paper end
+         } else {
+             // Paper start
+             ServerInternalException e = new ServerInternalException(
+-                    "Attempted to place a tile entity (" + tileentity + ") at " + tileentity.position.getX() + ","
+-                            + tileentity.position.getY() + "," + tileentity.position.getZ()
+-                            + " (" + getType(blockposition) + ") where there was no entity tile!\n" +
+-                            "Chunk coordinates: " + (this.loc.x * 16) + "," + (this.loc.z * 16));
++                "Attempted to place a tile entity (" + tileentity + ") at " + tileentity.position
++                    .getX() + "," + tileentity.position.getY() + "," + tileentity.position.getZ()
++                    + " (" + getType(blockposition) + ") where there was no entity tile!\n"
++                    + "Chunk coordinates: " + (this.loc.x * 16) + "," + (this.loc.z * 16));
+             e.printStackTrace();
+             ServerInternalException.reportInternalException(e);
+ 
+@@ -697,14 +768,12 @@ public class Chunk implements IChunkAccess {
+         }
+     }
+ 
+-    @Override
+-    public void a(NBTTagCompound nbttagcompound) {
+-        this.e.put(new BlockPosition(nbttagcompound.getInt("x"), nbttagcompound.getInt("y"), nbttagcompound.getInt("z")), nbttagcompound);
++    @Override public void a(NBTTagCompound nbttagcompound) {
++        this.e.put(new BlockPosition(nbttagcompound.getInt("x"), nbttagcompound.getInt("y"),
++            nbttagcompound.getInt("z")), nbttagcompound);
+     }
+ 
+-    @Nullable
+-    @Override
+-    public NBTTagCompound i(BlockPosition blockposition) {
++    @Nullable @Override public NBTTagCompound i(BlockPosition blockposition) {
+         TileEntity tileentity = this.getTileEntity(blockposition);
+         NBTTagCompound nbttagcompound;
+ 
+@@ -723,8 +792,7 @@ public class Chunk implements IChunkAccess {
+         }
+     }
+ 
+-    @Override
+-    public void removeTileEntity(BlockPosition blockposition) {
++    @Override public void removeTileEntity(BlockPosition blockposition) {
+         if (this.loaded || this.world.p_()) {
+             TileEntity tileentity = (TileEntity) this.tileEntities.remove(blockposition);
+ 
+@@ -748,10 +816,11 @@ public class Chunk implements IChunkAccess {
+         // Tuinity start - neighbour cache
+         int chunkX = this.loc.x;
+         int chunkZ = this.loc.z;
+-        ChunkProviderServer chunkProvider = ((WorldServer)this.world).getChunkProvider();
++        ChunkProviderServer chunkProvider = ((WorldServer) this.world).getChunkProvider();
+         for (int dx = -NEIGHBOUR_CACHE_RADIUS; dx <= NEIGHBOUR_CACHE_RADIUS; ++dx) {
+             for (int dz = -NEIGHBOUR_CACHE_RADIUS; dz <= NEIGHBOUR_CACHE_RADIUS; ++dz) {
+-                Chunk neighbour = chunkProvider.getChunkAtIfLoadedMainThreadNoCache(chunkX + dx, chunkZ + dz);
++                Chunk neighbour =
++                    chunkProvider.getChunkAtIfLoadedMainThreadNoCache(chunkX + dx, chunkZ + dz);
+                 if (neighbour != null) {
+                     neighbour.setNeighbourLoaded(-dx, -dz, this);
+                     // should be in cached already
+@@ -763,38 +832,43 @@ public class Chunk implements IChunkAccess {
+         this.loadedTicketLevel = true;
+         // Tuinity end - neighbour cache
+ 
+-        ((WorldServer)this.world).onChunkLoad(this); // Tuinity - optimise entity list iteration
++        ((WorldServer) this.world).onChunkLoad(this); // Tuinity - optimise entity list iteration
+         org.bukkit.Server server = this.world.getServer();
+-        ((WorldServer)this.world).getChunkProvider().addLoadedChunk(this); // Paper
++        ((WorldServer) this.world).getChunkProvider().addLoadedChunk(this); // Paper
+         if (server != null) {
+             /*
+              * If it's a new world, the first few chunks are generated inside
+              * the World constructor. We can't reliably alter that, so we have
+              * no way of creating a CraftWorld/CraftServer at that point.
+              */
+-            server.getPluginManager().callEvent(new org.bukkit.event.world.ChunkLoadEvent(this.bukkitChunk, this.needsDecoration));
++            server.getPluginManager().callEvent(
++                new org.bukkit.event.world.ChunkLoadEvent(this.bukkitChunk, this.needsDecoration));
+ 
+             if (this.needsDecoration) {
+-                try (co.aikar.timings.Timing ignored = this.world.timings.syncChunkLoadPopulateTimer.startTiming()) { // Paper
+-                this.needsDecoration = false;
+-                java.util.Random random = new java.util.Random();
+-                random.setSeed(world.getSeed());
+-                long xRand = random.nextLong() / 2L * 2L + 1L;
+-                long zRand = random.nextLong() / 2L * 2L + 1L;
+-                random.setSeed((long) this.loc.x * xRand + (long) this.loc.z * zRand ^ world.getSeed());
+-
+-                org.bukkit.World world = this.world.getWorld();
+-                if (world != null) {
+-                    this.world.populating = true;
+-                    try {
+-                        for (org.bukkit.generator.BlockPopulator populator : world.getPopulators()) {
+-                            populator.populate(world, random, bukkitChunk);
++                try (co.aikar.timings.Timing ignored = this.world.timings.syncChunkLoadPopulateTimer
++                    .startTiming()) { // Paper
++                    this.needsDecoration = false;
++                    java.util.Random random = new java.util.Random();
++                    random.setSeed(world.getSeed());
++                    long xRand = random.nextLong() / 2L * 2L + 1L;
++                    long zRand = random.nextLong() / 2L * 2L + 1L;
++                    random.setSeed(
++                        (long) this.loc.x * xRand + (long) this.loc.z * zRand ^ world.getSeed());
++
++                    org.bukkit.World world = this.world.getWorld();
++                    if (world != null) {
++                        this.world.populating = true;
++                        try {
++                            for (org.bukkit.generator.BlockPopulator populator : world
++                                .getPopulators()) {
++                                populator.populate(world, random, bukkitChunk);
++                            }
++                        } finally {
++                            this.world.populating = false;
+                         }
+-                    } finally {
+-                        this.world.populating = false;
+                     }
+-                }
+-                server.getPluginManager().callEvent(new org.bukkit.event.world.ChunkPopulateEvent(bukkitChunk));
++                    server.getPluginManager()
++                        .callEvent(new org.bukkit.event.world.ChunkPopulateEvent(bukkitChunk));
+                 } // Paper
+             }
+         }
+@@ -802,18 +876,20 @@ public class Chunk implements IChunkAccess {
+ 
+     public void unloadCallback() {
+         org.bukkit.Server server = this.world.getServer();
+-        org.bukkit.event.world.ChunkUnloadEvent unloadEvent = new org.bukkit.event.world.ChunkUnloadEvent(this.bukkitChunk, this.isNeedsSaving());
++        org.bukkit.event.world.ChunkUnloadEvent unloadEvent =
++            new org.bukkit.event.world.ChunkUnloadEvent(this.bukkitChunk, this.isNeedsSaving());
+         server.getPluginManager().callEvent(unloadEvent);
+         // note: saving can be prevented, but not forced if no saving is actually required
+         this.mustNotSave = !unloadEvent.isSaveChunk();
+-        ((WorldServer)this.world).getChunkProvider().removeLoadedChunk(this); // Paper
++        ((WorldServer) this.world).getChunkProvider().removeLoadedChunk(this); // Paper
+         // Tuinity start - neighbour cache
+         int chunkX = this.loc.x;
+         int chunkZ = this.loc.z;
+-        ChunkProviderServer chunkProvider = ((WorldServer)this.world).getChunkProvider();
++        ChunkProviderServer chunkProvider = ((WorldServer) this.world).getChunkProvider();
+         for (int dx = -NEIGHBOUR_CACHE_RADIUS; dx <= NEIGHBOUR_CACHE_RADIUS; ++dx) {
+             for (int dz = -NEIGHBOUR_CACHE_RADIUS; dz <= NEIGHBOUR_CACHE_RADIUS; ++dz) {
+-                Chunk neighbour = chunkProvider.getChunkAtIfLoadedMainThreadNoCache(chunkX + dx, chunkZ + dz);
++                Chunk neighbour =
++                    chunkProvider.getChunkAtIfLoadedMainThreadNoCache(chunkX + dx, chunkZ + dz);
+                 if (neighbour != null) {
+                     neighbour.setNeighbourUnloaded(-dx, -dz);
+                 }
+@@ -823,7 +899,7 @@ public class Chunk implements IChunkAccess {
+         this.resetNeighbours();
+         // Tuinity end - neighbour cache
+ 
+-        ((WorldServer)this.world).onChunkUnload(this); // Tuinity - optimise entity list iteration
++        ((WorldServer) this.world).onChunkUnload(this); // Tuinity - optimise entity list iteration
+     }
+     // CraftBukkit end
+ 
+@@ -831,8 +907,10 @@ public class Chunk implements IChunkAccess {
+         this.s = true;
+     }
+ 
+-    public void a(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> list, @Nullable Predicate<? super Entity> predicate) {
+-        com.tuinity.tuinity.util.TickThread.softEnsureTickThread("Async getEntities call"); // Tuinity
++    public void a(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> list,
++        @Nullable Predicate<? super Entity> predicate) {
++        com.tuinity.tuinity.util.TickThread
++            .softEnsureTickThread("Async getEntities call"); // Tuinity
+         int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
+         int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
+ 
+@@ -845,7 +923,8 @@ public class Chunk implements IChunkAccess {
+ 
+                 while (iterator.hasNext()) {
+                     Entity entity1 = (Entity) iterator.next();
+-                    if (entity1.shouldBeRemoved) continue; // Paper
++                    if (entity1.shouldBeRemoved)
++                        continue; // Paper
+ 
+                     if (entity1.getBoundingBox().c(axisalignedbb) && entity1 != entity) {
+                         if (predicate == null || predicate.test(entity1)) {
+@@ -853,13 +932,16 @@ public class Chunk implements IChunkAccess {
+                         }
+ 
+                         if (entity1 instanceof EntityEnderDragon) {
+-                            EntityComplexPart[] aentitycomplexpart = ((EntityEnderDragon) entity1).eo();
++                            EntityComplexPart[] aentitycomplexpart =
++                                ((EntityEnderDragon) entity1).eo();
+                             int l = aentitycomplexpart.length;
+ 
+                             for (int i1 = 0; i1 < l; ++i1) {
+                                 EntityComplexPart entitycomplexpart = aentitycomplexpart[i1];
+ 
+-                                if (entitycomplexpart != entity && entitycomplexpart.getBoundingBox().c(axisalignedbb) && (predicate == null || predicate.test(entitycomplexpart))) {
++                                if (entitycomplexpart != entity && entitycomplexpart
++                                    .getBoundingBox().c(axisalignedbb) && (predicate == null
++                                    || predicate.test(entitycomplexpart))) {
+                                     list.add(entitycomplexpart);
+                                 }
+                             }
+@@ -871,8 +953,10 @@ public class Chunk implements IChunkAccess {
+ 
+     }
+ 
+-    public <T extends Entity> void a(@Nullable EntityTypes<?> entitytypes, AxisAlignedBB axisalignedbb, List<? super T> list, Predicate<? super T> predicate) {
+-        com.tuinity.tuinity.util.TickThread.softEnsureTickThread("Async getEntities call"); // Tuinity
++    public <T extends Entity> void a(@Nullable EntityTypes<?> entitytypes,
++        AxisAlignedBB axisalignedbb, List<? super T> list, Predicate<? super T> predicate) {
++        com.tuinity.tuinity.util.TickThread
++            .softEnsureTickThread("Async getEntities call"); // Tuinity
+         int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
+         int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
+ 
+@@ -884,9 +968,11 @@ public class Chunk implements IChunkAccess {
+ 
+             while (iterator.hasNext()) {
+                 T entity = (T) iterator.next(); // CraftBukkit - decompile error
+-                if (entity.shouldBeRemoved) continue; // Paper
++                if (entity.shouldBeRemoved)
++                    continue; // Paper
+ 
+-                if ((entitytypes == null || entity.getEntityType() == entitytypes) && entity.getBoundingBox().c(axisalignedbb) && predicate.test(entity)) {
++                if ((entitytypes == null || entity.getEntityType() == entitytypes) && entity
++                    .getBoundingBox().c(axisalignedbb) && predicate.test(entity)) {
+                     list.add(entity);
+                 }
+             }
+@@ -894,8 +980,10 @@ public class Chunk implements IChunkAccess {
+ 
+     }
+ 
+-    public <T extends Entity> void a(Class<? extends T> oclass, AxisAlignedBB axisalignedbb, List<T> list, @Nullable Predicate<? super T> predicate) {
+-        com.tuinity.tuinity.util.TickThread.softEnsureTickThread("Async getEntities call"); // Tuinity
++    public <T extends Entity> void a(Class<? extends T> oclass, AxisAlignedBB axisalignedbb,
++        List<T> list, @Nullable Predicate<? super T> predicate) {
++        com.tuinity.tuinity.util.TickThread
++            .softEnsureTickThread("Async getEntities call"); // Tuinity
+         int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
+         int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
+ 
+@@ -913,7 +1001,8 @@ public class Chunk implements IChunkAccess {
+         }
+         // Paper end
+         for (int k = i; k <= j; ++k) {
+-            if (counts != null && counts[k] <= 0) continue; // Paper - Don't check a chunk if it doesn't have the type we are looking for
++            if (counts != null && counts[k] <= 0)
++                continue; // Paper - Don't check a chunk if it doesn't have the type we are looking for
+             Iterator iterator = this.entitySlices[k].iterator(); // Spigot
+ 
+             // Paper start - Don't search for inventories if we have none, and that is all we want
+@@ -923,13 +1012,16 @@ public class Chunk implements IChunkAccess {
+              * Make sure the inventory selector stays in sync.
+              * It should be the one that checks `var1 instanceof IInventory && var1.isAlive()`
+              */
+-            if (predicate == IEntitySelector.isInventory() && inventoryEntityCounts[k] <= 0) continue;
++            if (predicate == IEntitySelector.isInventory() && inventoryEntityCounts[k] <= 0)
++                continue;
+             // Paper end
+             while (iterator.hasNext()) {
+                 T t0 = (T) iterator.next(); // CraftBukkit - decompile error
+-                if (t0.shouldBeRemoved) continue; // Paper
++                if (t0.shouldBeRemoved)
++                    continue; // Paper
+ 
+-                if (oclass.isInstance(t0) && t0.getBoundingBox().c(axisalignedbb) && (predicate == null || predicate.test(t0))) { // Spigot - instance check
++                if (oclass.isInstance(t0) && t0.getBoundingBox().c(axisalignedbb) && (
++                    predicate == null || predicate.test(t0))) { // Spigot - instance check
+                     list.add(t0);
+                 }
+             }
+@@ -941,13 +1033,11 @@ public class Chunk implements IChunkAccess {
+         return false;
+     }
+ 
+-    @Override
+-    public ChunkCoordIntPair getPos() {
++    @Override public ChunkCoordIntPair getPos() {
+         return this.loc;
+     }
+ 
+-    @Override
+-    public BiomeStorage getBiomeIndex() {
++    @Override public BiomeStorage getBiomeIndex() {
+         return this.d;
+     }
+ 
+@@ -959,8 +1049,7 @@ public class Chunk implements IChunkAccess {
+         return this.world;
+     }
+ 
+-    @Override
+-    public Collection<Entry<HeightMap.Type, HeightMap>> f() {
++    @Override public Collection<Entry<HeightMap.Type, HeightMap>> f() {
+         return Collections.unmodifiableSet(this.heightMap.entrySet());
+     }
+ 
+@@ -972,101 +1061,88 @@ public class Chunk implements IChunkAccess {
+         return this.entitySlices;
+     }
+ 
+-    @Override
+-    public NBTTagCompound f(BlockPosition blockposition) {
++    @Override public NBTTagCompound f(BlockPosition blockposition) {
+         return (NBTTagCompound) this.e.get(blockposition);
+     }
+ 
+-    @Override
+-    public Stream<BlockPosition> m() {
+-        return StreamSupport.stream(BlockPosition.b(this.loc.d(), 0, this.loc.e(), this.loc.f(), 255, this.loc.g()).spliterator(), false).filter((blockposition) -> {
++    @Override public Stream<BlockPosition> m() {
++        return StreamSupport.stream(
++            BlockPosition.b(this.loc.d(), 0, this.loc.e(), this.loc.f(), 255, this.loc.g())
++                .spliterator(), false).filter((blockposition) -> {
+             return this.getType(blockposition).h() != 0;
+         });
+     }
+ 
+-    @Override
+-    public TickList<Block> n() {
++    @Override public TickList<Block> n() {
+         return this.o;
+     }
+ 
+-    @Override
+-    public TickList<FluidType> o() {
++    @Override public TickList<FluidType> o() {
+         return this.p;
+     }
+ 
+-    @Override
+-    public void setNeedsSaving(boolean flag) {
++    @Override public void setNeedsSaving(boolean flag) {
+         this.s = flag;
+     }
+ 
+-    @Override
+-    public boolean isNeedsSaving() {
+-        return (this.s || this.q && this.world.getTime() != this.lastSaved) && !this.mustNotSave; // CraftBukkit
++    @Override public boolean isNeedsSaving() {
++        return (this.s || this.q && this.world.getTime() != this.lastSaved)
++            && !this.mustNotSave; // CraftBukkit
+     }
+ 
+     public void d(boolean flag) {
+         this.q = flag;
+     }
+ 
+-    @Override
+-    public void setLastSaved(long i) {
++    @Override public void setLastSaved(long i) {
+         this.lastSaved = i;
+     }
+ 
+-    @Nullable
+-    @Override
+-    public StructureStart a(String s) {
++    @Nullable @Override public StructureStart a(String s) {
+         return (StructureStart) this.l.get(s);
+     }
+ 
+-    @Override
+-    public void a(String s, StructureStart structurestart) {
++    @Override public void a(String s, StructureStart structurestart) {
+         this.l.put(s, structurestart);
+     }
+ 
+-    @Override
+-    public Map<String, StructureStart> h() {
++    @Override public Map<String, StructureStart> h() {
+         return this.l;
+     }
+ 
+-    @Override
+-    public void a(Map<String, StructureStart> map) {
++    @Override public void a(Map<String, StructureStart> map) {
+         this.l.clear();
+         this.l.putAll(map);
+     }
+ 
+-    @Override
+-    public LongSet b(String s) {
++    @Override public LongSet b(String s) {
+         return (LongSet) this.m.computeIfAbsent(s, (s1) -> {
+             return new LongOpenHashSet();
+         });
+     }
+ 
+-    @Override
+-    public void a(String s, long i) {
++    @Override public void a(String s, long i) {
+         ((LongSet) this.m.computeIfAbsent(s, (s1) -> {
+             return new LongOpenHashSet();
+         })).add(i);
+     }
+ 
+-    @Override
+-    public Map<String, LongSet> v() {
++    @Override public Map<String, LongSet> v() {
+         return this.m;
+     }
+ 
+-    @Override
+-    public void b(Map<String, LongSet> map) {
++    @Override public void b(Map<String, LongSet> map) {
+         this.m.clear();
+         this.m.putAll(map);
+     }
+ 
+-    @Override
+-    public long getInhabitedTime() {
+-        return world.paperConfig.fixedInhabitedTime < 0 ? this.inhabitedTime : world.paperConfig.fixedInhabitedTime; // Paper
++    @Override public long getInhabitedTime() {
++        return world.paperConfig.fixedInhabitedTime < 0 ?
++            this.inhabitedTime :
++            world.paperConfig.fixedInhabitedTime; // Paper
+     }
+ 
+-    @Override
+-    public void setInhabitedTime(long i) {
++    @Override public void setInhabitedTime(long i) {
+         this.inhabitedTime = i;
+     }
+ 
+@@ -1081,7 +1157,8 @@ public class Chunk implements IChunkAccess {
+                     Short oshort = (Short) shortlistiterator.next();
+                     BlockPosition blockposition = ProtoChunk.a(oshort, i, chunkcoordintpair);
+                     IBlockData iblockdata = this.getType(blockposition);
+-                    IBlockData iblockdata1 = Block.b(iblockdata, (GeneratorAccess) this.world, blockposition);
++                    IBlockData iblockdata1 =
++                        Block.b(iblockdata, (GeneratorAccess) this.world, blockposition);
+ 
+                     this.world.setTypeAndData(blockposition, iblockdata1, 20);
+                 }
+@@ -1103,8 +1180,7 @@ public class Chunk implements IChunkAccess {
+         this.i.a(this);
+     }
+ 
+-    @Nullable
+-    private TileEntity a(BlockPosition blockposition, NBTTagCompound nbttagcompound) {
++    @Nullable private TileEntity a(BlockPosition blockposition, NBTTagCompound nbttagcompound) {
+         TileEntity tileentity;
+ 
+         if ("DUMMY".equals(nbttagcompound.getString("id"))) {
+@@ -1114,7 +1190,9 @@ public class Chunk implements IChunkAccess {
+                 tileentity = ((ITileEntity) block).createTile(this.world);
+             } else {
+                 tileentity = null;
+-                Chunk.LOGGER.warn("Tried to load a DUMMY block entity @ {} but found not block entity block {} at location", blockposition, this.getType(blockposition));
++                Chunk.LOGGER.warn(
++                    "Tried to load a DUMMY block entity @ {} but found not block entity block {} at location",
++                    blockposition, this.getType(blockposition));
+             }
+         } else {
+             tileentity = TileEntity.create(nbttagcompound);
+@@ -1124,27 +1202,27 @@ public class Chunk implements IChunkAccess {
+             tileentity.setLocation(this.world, blockposition);
+             this.a(tileentity);
+         } else {
+-            Chunk.LOGGER.warn("Tried to load a block entity for block {} but failed at location {}", this.getType(blockposition), blockposition);
++            Chunk.LOGGER.warn("Tried to load a block entity for block {} but failed at location {}",
++                this.getType(blockposition), blockposition);
+         }
+ 
+         return tileentity;
+     }
+ 
+-    @Override
+-    public ChunkConverter p() {
++    @Override public ChunkConverter p() {
+         return this.i;
+     }
+ 
+-    @Override
+-    public ShortList[] l() {
++    @Override public ShortList[] l() {
+         return this.n;
+     }
+ 
+     public void B() {
+         if (this.o instanceof ProtoChunkTickList) {
+-            ((ProtoChunkTickList<Block>) this.o).a(this.world.getBlockTickList(), (blockposition) -> { // CraftBukkit - decompile error
+-                return this.getType(blockposition).getBlock();
+-            });
++            ((ProtoChunkTickList<Block>) this.o).a(this.world.getBlockTickList(),
++                (blockposition) -> { // CraftBukkit - decompile error
++                    return this.getType(blockposition).getBlock();
++                });
+             this.o = TickListEmpty.b();
+         } else if (this.o instanceof TickListChunk) {
+             this.world.getBlockTickList().a(((TickListChunk) this.o).b());
+@@ -1152,9 +1230,10 @@ public class Chunk implements IChunkAccess {
+         }
+ 
+         if (this.p instanceof ProtoChunkTickList) {
+-            ((ProtoChunkTickList<FluidType>) this.p).a(this.world.getFluidTickList(), (blockposition) -> { // CraftBukkit - decompile error
+-                return this.getFluid(blockposition).getType();
+-            });
++            ((ProtoChunkTickList<FluidType>) this.p).a(this.world.getFluidTickList(),
++                (blockposition) -> { // CraftBukkit - decompile error
++                    return this.getFluid(blockposition).getType();
++                });
+             this.p = TickListEmpty.b();
+         } else if (this.p instanceof TickListChunk) {
+             this.world.getFluidTickList().a(((TickListChunk) this.p).b());
+@@ -1165,19 +1244,20 @@ public class Chunk implements IChunkAccess {
+ 
+     public void a(WorldServer worldserver) {
+         if (this.o == TickListEmpty.<Block>b()) { // CraftBukkit - decompile error
+-            this.o = new TickListChunk<>(IRegistry.BLOCK::getKey, worldserver.getBlockTickList().a(this.loc, true, false));
++            this.o = new TickListChunk<>(IRegistry.BLOCK::getKey,
++                worldserver.getBlockTickList().a(this.loc, true, false));
+             this.setNeedsSaving(true);
+         }
+ 
+         if (this.p == TickListEmpty.<FluidType>b()) { // CraftBukkit - decompile error
+-            this.p = new TickListChunk<>(IRegistry.FLUID::getKey, worldserver.getFluidTickList().a(this.loc, true, false));
++            this.p = new TickListChunk<>(IRegistry.FLUID::getKey,
++                worldserver.getFluidTickList().a(this.loc, true, false));
+             this.setNeedsSaving(true);
+         }
+ 
+     }
+ 
+-    @Override
+-    public ChunkStatus getChunkStatus() {
++    @Override public ChunkStatus getChunkStatus() {
+         return ChunkStatus.FULL;
+     }
+ 
+@@ -1189,13 +1269,11 @@ public class Chunk implements IChunkAccess {
+         this.u = supplier;
+     }
+ 
+-    @Override
+-    public boolean r() {
++    @Override public boolean r() {
+         return this.x;
+     }
+ 
+-    @Override
+-    public void b(boolean flag) {
++    @Override public void b(boolean flag) {
+         this.x = flag;
+         this.setNeedsSaving(true);
+     }
+@@ -1204,6 +1282,52 @@ public class Chunk implements IChunkAccess {
+ 
+         IMMEDIATE, QUEUED, CHECK;
+ 
+-        private EnumTileEntityState() {}
++        private EnumTileEntityState() {
++        }
++    }
++
++
++    // Servett Start
++    public void addPlayerModifiedBlock(final int x, final int y, final int z,
++        final EntityPlayer entityPlayer, final IBlockData blockData) {
++        final long position = BlockPosition.at(x, y, z);
++        entityPlayer.modifiedBlocks
++            .put(position, new PlayerBlockModification(entityPlayer.getId(), blockData));
+     }
++
++    public void removePlayerModifiedBlock(int x, int y, int z, EntityPlayer entityPlayer) {
++        final long position = BlockPosition.at(x, y, z);
++        entityPlayer.modifiedBlocks.remove(position);
++    }
++
++    public static class PlayerBlockModification {
++
++        private final int playerID;
++        private final IBlockData modifiedBlock;
++
++        private PlayerBlockModification(final int playerID, final IBlockData modifiedBlock) {
++            this.playerID = playerID;
++            this.modifiedBlock = modifiedBlock;
++        }
++
++        public int getPlayerID() {
++            return this.playerID;
++        }
++
++        public IBlockData getModifiedBlock() {
++            return this.modifiedBlock;
++        }
++    }
++
++    @Override public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
++        final PlayerBlockModification playerBlockModification =
++            tickingPlayer.modifiedBlocks.get(position.asLong());
++        if (playerBlockModification != null) {
++            return playerBlockModification.getModifiedBlock();
++        } else {
++            return getBlockDataInternal(position.x, position.y, position.z);
++        }
++    }
++    // Servett End
++
+ }
+diff --git a/src/main/java/net/minecraft/server/ChunkCache.java b/src/main/java/net/minecraft/server/ChunkCache.java
+index 29c66b983dc503903a76bab753bb9035ec10f54c..5eb0146aee59f5ec1a43a8203193efcb6377133f 100644
+--- a/src/main/java/net/minecraft/server/ChunkCache.java
++++ b/src/main/java/net/minecraft/server/ChunkCache.java
+@@ -95,11 +95,21 @@ public class ChunkCache implements IBlockAccess, ICollisionAccess {
+ 
+     @Override
+     public IBlockData getType(BlockPosition blockposition) {
++        // Servett Start
++        synchronized (e.tickingPlayerLock) {
++            if (e.tickingPlayer != null) {
++                final Chunk.PlayerBlockModification playerBlockModification =
++                    e.tickingPlayer.modifiedBlocks.get(blockposition.asLong());
++                if (playerBlockModification != null) {
++                    return playerBlockModification.getModifiedBlock();
++                }
++            }
++        }
++        // Servett End
+         if (World.isOutsideWorld(blockposition)) {
+             return Blocks.AIR.getBlockData();
+         } else {
+             IChunkAccess ichunkaccess = this.d(blockposition);
+-
+             return ichunkaccess.getType(blockposition);
+         }
+     }
+@@ -114,4 +124,22 @@ public class ChunkCache implements IBlockAccess, ICollisionAccess {
+             return ichunkaccess.getFluid(blockposition);
+         }
+     }
++
++    // Servett Start
++    @Override
++    public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
++        final Chunk.PlayerBlockModification playerBlockModification =
++            tickingPlayer.modifiedBlocks.get(position.asLong());
++        if (playerBlockModification != null) {
++            return playerBlockModification.getModifiedBlock();
++        }
++        if (World.isOutsideWorld(position)) {
++            return Blocks.AIR.getBlockData();
++        } else {
++            IChunkAccess ichunkaccess = this.d(position);
++            return ichunkaccess.getType(position);
++        }
++    }
++    // Servett End
++
+ }
+diff --git a/src/main/java/net/minecraft/server/ChunkRegionLoader.java b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
+index d529b795c5434328a81c015558708b4994203099..9e8a8482e17a54c6878b469ac3297b300c08b460 100644
+--- a/src/main/java/net/minecraft/server/ChunkRegionLoader.java
++++ b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
+@@ -1,23 +1,23 @@
+ package net.minecraft.server;
+ 
+-import co.aikar.timings.Timings;
+ import com.google.common.collect.Maps;
+ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import it.unimi.dsi.fastutil.shorts.ShortList;
+ import it.unimi.dsi.fastutil.shorts.ShortListIterator;
+-import java.util.ArrayDeque; // Paper
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import javax.annotation.Nullable;
++import java.util.ArrayDeque;
+ import java.util.Arrays;
+ import java.util.BitSet;
+ import java.util.EnumSet;
+ import java.util.Iterator;
+ import java.util.Map;
+-import java.util.Objects;
+ import java.util.Map.Entry;
++import java.util.Objects;
+ import java.util.function.Function;
+-import javax.annotation.Nullable;
+-import org.apache.logging.log4j.LogManager;
+-import org.apache.logging.log4j.Logger;
+ 
+ public class ChunkRegionLoader {
+ 
+@@ -97,7 +97,7 @@ public class ChunkRegionLoader {
+             byte b0 = nbttagcompound2.getByte("Y");
+ 
+             if (nbttagcompound2.hasKeyOfType("Palette", 9) && nbttagcompound2.hasKeyOfType("BlockStates", 12)) {
+-                ChunkSection chunksection = new ChunkSection(b0 << 4, null, worldserver, false); // Paper - Anti-Xray
++                ChunkSection chunksection = new ChunkSection(worldserver, b0 << 4, null, worldserver, false); // Paper - Anti-Xray // Servett: Add world
+ 
+                 chunksection.getBlocks().a(nbttagcompound2.getList("Palette", 10), nbttagcompound2.getLongArray("BlockStates"));
+                 chunksection.recalcBlockCounts();
+diff --git a/src/main/java/net/minecraft/server/ChunkSection.java b/src/main/java/net/minecraft/server/ChunkSection.java
+index 8b28fb5ee13860ed16df6838d0ed50016a3e4caf..0ef59986acdbeac51f9c7e0b9bb6068c572d9426 100644
+--- a/src/main/java/net/minecraft/server/ChunkSection.java
++++ b/src/main/java/net/minecraft/server/ChunkSection.java
+@@ -10,24 +10,25 @@ public class ChunkSection {
+     short tickingBlockCount; // Paper - private -> package-private
+     private short e;
+     final DataPaletteBlock<IBlockData> blockIds;
++    private final World world; // Servett
+ 
+     Chunk chunk; // Paper
+     final com.destroystokyo.paper.util.maplist.IBlockDataList tickingList = new com.destroystokyo.paper.util.maplist.IBlockDataList(); // Paper
+ 
+-    public ChunkSection(int i) {
++    public ChunkSection(World world, int i) { // Servett: Add world
+         // Paper start - add parameters
+-        this(i, (IChunkAccess)null, (IWorldReader)null, true);
++        this(world, i, (IChunkAccess)null, (IWorldReader)null, true);
+     }
+-    public ChunkSection(int i, IChunkAccess chunk, IWorldReader world, boolean initializeBlocks) {
+-        this(i, (short) 0, (short) 0, (short) 0, chunk, world, initializeBlocks);
++    public ChunkSection(World worldObject, int i, IChunkAccess chunk, IWorldReader world, boolean initializeBlocks) { // Servett: Add world
++        this(worldObject, i, (short) 0, (short) 0, (short) 0, chunk, world, initializeBlocks);
+         // Paper end
+     }
+ 
+-    public ChunkSection(int i, short short0, short short1, short short2) {
++    public ChunkSection(World world, int i, short short0, short short1, short short2) { // Servett: Add world
+         // Paper start - add parameters
+-        this(i, short0, short1, short2, (IChunkAccess)null, (IWorldReader)null, true);
++        this(world, i, short0, short1, short2, (IChunkAccess)null, (IWorldReader)null, true);
+     }
+-    public ChunkSection(int i, short short0, short short1, short short2, IChunkAccess chunk, IWorldReader world, boolean initializeBlocks) {
++    public ChunkSection(World worldObject, int i, short short0, short short1, short short2, IChunkAccess chunk, IWorldReader world, boolean initializeBlocks) { // Servett: Add world
+         // Paper end
+         this.yPos = i;
+         this.nonEmptyBlockCount = short0;
+@@ -39,9 +40,31 @@ public class ChunkSection {
+             this.chunk = (Chunk)chunk;
+         }
+         // Paper end
++        // Servett Start
++        this.world = worldObject;
++        // Servett end
+     }
+ 
+     public IBlockData getType(int i, int j, int k) {
++        if (this.world != null) {
++            synchronized (world.tickingPlayerLock) {
++                if (world.tickingPlayer != null) {
++                    final Chunk.PlayerBlockModification playerBlockModification =
++                        world.tickingPlayer.modifiedBlocks.get(BlockPosition.at(i, j, k));
++                    if (playerBlockModification != null) {
++                        return playerBlockModification.getModifiedBlock();
++                    }
++                }
++            }
++        } else {
++            synchronized (EntityPlayer.tickingPlayerLock) {
++                final Chunk.PlayerBlockModification playerBlockModification = EntityPlayer.tickingPlayer
++                    .modifiedBlocks.get(BlockPosition.at(i, j, k));
++                if (playerBlockModification != null) {
++                    return playerBlockModification.getModifiedBlock();
++                }
++            }
++        }
+         return (IBlockData) this.blockIds.a(i, j, k);
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index d49c45ce7fa14b28c28f8f1daa713f394be4de95..695bed49926cf6e96a696e8ed2f489d311dc553a 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -4,20 +4,8 @@ import com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent;
+ import com.google.common.collect.Lists;
+ import com.mojang.authlib.GameProfile;
+ import com.mojang.datafixers.util.Either;
+-import io.netty.util.concurrent.Future;
+-import java.util.ArrayDeque; // Paper
+-import java.util.Collection;
+-import java.util.Deque; // Paper
+-import java.util.Iterator;
+-import java.util.List;
+-import java.util.OptionalInt;
+-import java.util.Random;
+-import javax.annotation.Nullable;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+-
+-// CraftBukkit start
+-import com.google.common.base.Preconditions;
+ import org.bukkit.Bukkit;
+ import org.bukkit.GameMode;
+ import org.bukkit.Location;
+@@ -35,11 +23,30 @@ import org.bukkit.event.player.PlayerPortalEvent;
+ import org.bukkit.event.player.PlayerTeleportEvent;
+ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
+ import org.bukkit.inventory.MainHand;
++
++import javax.annotation.Nullable;
++import java.util.ArrayDeque;
++import java.util.Collection;
++import java.util.Deque;
++import java.util.HashMap;
++import java.util.Iterator;
++import java.util.List;
++import java.util.Map;
++import java.util.OptionalInt;
++import java.util.Random;
++
++// CraftBukkit start
+ // CraftBukkit end
+ 
+ public class EntityPlayer extends EntityHuman implements ICrafting {
+ 
++    // Servett Start
++    public static EntityPlayer tickingPlayer;
++    public static final Object tickingPlayerLock = new Object();
++    // Servett End
++
+     private static final Logger LOGGER = LogManager.getLogger();
++    public final Map<Long, Chunk.PlayerBlockModification> modifiedBlocks = new HashMap<>(); // Servett
+     public String locale = null; // CraftBukkit - lowercase // Paper - default to null
+     public PlayerConnection playerConnection;
+     public final MinecraftServer server;
+@@ -397,69 +404,77 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+ 
+     @Override
+     public void tick() {
+-        // CraftBukkit start
+-        if (this.joining) {
+-            this.joining = false;
+-        }
+-        // CraftBukkit end
+-        this.playerInteractManager.a();
+-        --this.invulnerableTicks;
+-        if (this.noDamageTicks > 0) {
+-            --this.noDamageTicks;
+-        }
++        synchronized (world.tickingPlayerLock) { // Servett Start
++            world.tickingPlayer = this; // Servett
++            tickingPlayer = this; // Servett
+ 
+-        // Paper start - Configurable container update tick rate
+-        if (--containerUpdateDelay <= 0) {
+-            this.activeContainer.c();
+-            containerUpdateDelay = world.paperConfig.containerUpdateTickRate;
+-        }
+-        // Paper end
+-        if (!this.world.isClientSide && !this.activeContainer.canUse(this)) {
+-            this.closeInventory(org.bukkit.event.inventory.InventoryCloseEvent.Reason.CANT_USE); // Paper
+-            this.activeContainer = this.defaultContainer;
+-        }
++            // CraftBukkit start
++            if (this.joining) {
++                this.joining = false;
++            }
++            // CraftBukkit end
++            this.playerInteractManager.a();
++            --this.invulnerableTicks;
++            if (this.noDamageTicks > 0) {
++                --this.noDamageTicks;
++            }
++
++            // Paper start - Configurable container update tick rate
++            if (--containerUpdateDelay <= 0) {
++                this.activeContainer.c();
++                containerUpdateDelay = world.paperConfig.containerUpdateTickRate;
++            }
++            // Paper end
++            if (!this.world.isClientSide && !this.activeContainer.canUse(this)) {
++                this.closeInventory(org.bukkit.event.inventory.InventoryCloseEvent.Reason.CANT_USE); // Paper
++                this.activeContainer = this.defaultContainer;
++            }
+ 
+-        while (!this.removeQueue.isEmpty()) {
+-            int i = Math.min(this.removeQueue.size(), Integer.MAX_VALUE);
+-            int[] aint = new int[i];
+-            //Iterator<Integer> iterator = this.removeQueue.iterator(); // Paper
+-            int j = 0;
++            while (!this.removeQueue.isEmpty()) {
++                int i = Math.min(this.removeQueue.size(), Integer.MAX_VALUE);
++                int[] aint = new int[i];
++                //Iterator<Integer> iterator = this.removeQueue.iterator(); // Paper
++                int j = 0;
+ 
+-            // Paper start
++                // Paper start
+             /* while (iterator.hasNext() && j < i) {
+                 aint[j++] = (Integer) iterator.next();
+                 iterator.remove();
+             } */
+ 
+-            Integer integer;
+-            while (j < i && (integer = this.removeQueue.poll()) != null) {
+-                aint[j++] = integer.intValue();
+-            }
+-            // Paper end
++                Integer integer;
++                while (j < i && (integer = this.removeQueue.poll()) != null) {
++                    aint[j++] = integer.intValue();
++                }
++                // Paper end
+ 
+-            this.playerConnection.sendPacket(new PacketPlayOutEntityDestroy(aint));
+-        }
++                this.playerConnection.sendPacket(new PacketPlayOutEntityDestroy(aint));
++            }
+ 
+-        Entity entity = this.getSpecatorTarget();
++            Entity entity = this.getSpecatorTarget();
+ 
+-        if (entity != this) {
+-            if (entity.isAlive()) {
+-                this.setLocation(entity.locX(), entity.locY(), entity.locZ(), entity.yaw, entity.pitch);
+-                this.getWorldServer().getChunkProvider().movePlayer(this);
+-                if (this.dU()) {
++            if (entity != this) {
++                if (entity.isAlive()) {
++                    this.setLocation(entity.locX(), entity.locY(), entity.locZ(), entity.yaw, entity.pitch);
++                    this.getWorldServer().getChunkProvider().movePlayer(this);
++                    if (this.dU()) {
++                        this.setSpectatorTarget(this);
++                    }
++                } else {
+                     this.setSpectatorTarget(this);
+                 }
+-            } else {
+-                this.setSpectatorTarget(this);
+             }
+-        }
+ 
+-        CriterionTriggers.w.a(this);
+-        if (this.co != null) {
+-            CriterionTriggers.u.a(this, this.co, this.ticksLived - this.cp);
+-        }
++            CriterionTriggers.w.a(this);
++            if (this.co != null) {
++                CriterionTriggers.u.a(this, this.co, this.ticksLived - this.cp);
++            }
++
++            this.advancementDataPlayer.b(this);
+ 
+-        this.advancementDataPlayer.b(this);
++            world.tickingPlayer = null; // Servett
++            tickingPlayer = null; // Servett
++        }
+     }
+ 
+     public void playerTick() {
+@@ -651,7 +666,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
                  ichatbasecomponent = org.bukkit.craftbukkit.util.CraftChatMessage.fromStringOrNull(deathMessage);
              }
  
@@ -26,12 +1548,34 @@ index 3f5a1d4f32abccd32761285c0d749393e78f243a..794386c194d61bce88f8d67ffe32b8cf
                  if (!future.isSuccess()) {
                      boolean flag1 = true;
                      String s = ichatbasecomponent.a(256);
-@@ -1997,4 +1997,5 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -2001,4 +2016,5 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
          return (CraftPlayer) super.getBukkitEntity();
      }
      // CraftBukkit end
 +    
  }
+diff --git a/src/main/java/net/minecraft/server/IBlockAccess.java b/src/main/java/net/minecraft/server/IBlockAccess.java
+index 29cdc00875aa5004132820f36e781c7bf4573162..9c9339930a163e5fec8a5c2029fa2ec8a6f890e3 100644
+--- a/src/main/java/net/minecraft/server/IBlockAccess.java
++++ b/src/main/java/net/minecraft/server/IBlockAccess.java
+@@ -1,8 +1,8 @@
+ package net.minecraft.server;
+ 
++import javax.annotation.Nullable;
+ import java.util.function.BiFunction;
+ import java.util.function.Function;
+-import javax.annotation.Nullable;
+ 
+ public interface IBlockAccess {
+ 
+@@ -11,6 +11,7 @@ public interface IBlockAccess {
+ 
+     IBlockData getTypeIfLoaded(BlockPosition blockposition); // Paper - if loaded util
+     IBlockData getType(BlockPosition blockposition);
++    IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer); // Servett
+ 
+     Fluid getFluidIfLoaded(BlockPosition blockposition); // Paper - if loaded util
+     Fluid getFluid(BlockPosition blockposition);
 diff --git a/src/main/java/net/minecraft/server/ItemBucket.java b/src/main/java/net/minecraft/server/ItemBucket.java
 index ffe4b9eb868ecd9582ba1d3fc3aef0f82372e852..e2beb1464aaf977f84f33925f2ee27f7b76b7761 100644
 --- a/src/main/java/net/minecraft/server/ItemBucket.java
@@ -184,8 +1728,39 @@ index 68b00a6e41c0b0115c47256032a65ae42570fc89..4823a8cebf186f67878fd33bcb9ca58b
      }
  
      @Override
+diff --git a/src/main/java/net/minecraft/server/PacketPlayOutMultiBlockChange.java b/src/main/java/net/minecraft/server/PacketPlayOutMultiBlockChange.java
+index fe7566659a02b3fd3daee0b1bf3875e513030df0..ddcf78762d66b62ff5f0eb046f0b951dfea3afe7 100644
+--- a/src/main/java/net/minecraft/server/PacketPlayOutMultiBlockChange.java
++++ b/src/main/java/net/minecraft/server/PacketPlayOutMultiBlockChange.java
+@@ -9,12 +9,12 @@ public class PacketPlayOutMultiBlockChange implements Packet<PacketListenerPlayO
+ 
+     public PacketPlayOutMultiBlockChange() {}
+ 
+-    public PacketPlayOutMultiBlockChange(int i, short[] ashort, Chunk chunk) {
++    public PacketPlayOutMultiBlockChange(final EntityPlayer entityPlayer, int i, short[] ashort, Chunk chunk) {
+         this.a = chunk.getPos();
+         this.b = new PacketPlayOutMultiBlockChange.MultiBlockChangeInfo[i];
+ 
+         for (int j = 0; j < this.b.length; ++j) {
+-            this.b[j] = new PacketPlayOutMultiBlockChange.MultiBlockChangeInfo(ashort[j], chunk);
++            this.b[j] = new PacketPlayOutMultiBlockChange.MultiBlockChangeInfo(entityPlayer, ashort[j], chunk);
+         }
+ 
+     }
+@@ -61,9 +61,9 @@ public class PacketPlayOutMultiBlockChange implements Packet<PacketListenerPlayO
+             this.c = iblockdata;
+         }
+ 
+-        public MultiBlockChangeInfo(short short0, Chunk chunk) {
++        public MultiBlockChangeInfo(EntityPlayer entityPlayer, short short0, Chunk chunk) {
+             this.b = short0;
+-            this.c = chunk.getType(this.a());
++            this.c = chunk.getType(this.a(), entityPlayer);
+         }
+ 
+         public BlockPosition a() {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 03fc19764fc3bbe21d5980399926a74f23575513..762428c16b4e4c42ef0f09654d6d610dd85121ae 100644
+index 7e66fab8f3e7aedde105b892a18ab1b4da6b34f3..3ff283b6bbb63ea24e3bda6394729a038cc53753 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -1,14 +1,16 @@
@@ -236,7 +1811,7 @@ index 03fc19764fc3bbe21d5980399926a74f23575513..762428c16b4e4c42ef0f09654d6d610d
 +                this.a(player -> new PacketPlayOutMapChunk(chunk, this.r, true), false); // Paper - Anti-Xray
              } else if (this.dirtyCount != 0) {
 -                this.a(new PacketPlayOutMultiBlockChange(this.dirtyCount, this.dirtyBlocks, chunk), false);
-+                this.a(player -> new PacketPlayOutMultiBlockChange(this.dirtyCount, this.dirtyBlocks, chunk), false);
++                this.a(player -> new PacketPlayOutMultiBlockChange(player, this.dirtyCount, this.dirtyBlocks, chunk), false);
  
                  for (i = 0; i < this.dirtyCount; ++i) {
                      j = (this.dirtyBlocks[i] >> 12 & 15) + this.location.x * 16;
@@ -256,54 +1831,82 @@ index 03fc19764fc3bbe21d5980399926a74f23575513..762428c16b4e4c42ef0f09654d6d610d
          // Tuinity start - per player view distance
          // there can be potential desync with player's last mapped section and the view distance map, so use the
          // view distance map here.
-@@ -343,6 +347,8 @@ public class PlayerChunk {
-                     int distZ = Math.abs(com.tuinity.tuinity.util.Util.getCoordinateZ(lastPosition) - this.location.z);
- 
-                     if (Math.max(distX, distZ) == viewDistance) {
-+                        final Packet<?> packet = packetFunction.apply(player);
-+                        packet.process(player.playerConnection);
-                         player.playerConnection.sendPacket(packet);
-                     }
+@@ -337,6 +341,9 @@ public class PlayerChunk {
+                     continue;
                  }
-@@ -354,6 +360,8 @@ public class PlayerChunk {
-                         continue;
-                     }
-                     EntityPlayer player = (EntityPlayer)temp;
-+                    final Packet<?> packet = packetFunction.apply(player);
-+                    packet.process(player.playerConnection);
-                     player.playerConnection.sendPacket(packet);
+                 EntityPlayer player = (EntityPlayer)temp;
++                final Packet<?> packet = packetFunction.apply(player);
++                packet.process(player.playerConnection);
++
+                 if (!player.loadedChunks.contains(coordinate)) {
+                     continue;
                  }
-             }
-@@ -362,6 +370,8 @@ public class PlayerChunk {
-         }
-         // Tuinity end - per player view distance
-         this.players.a(this.location, flag).forEach((entityplayer) -> {
-+            final Packet<?> packet = packetFunction.apply(entityplayer);
-+            packet.process(entityplayer.playerConnection);
-             entityplayer.playerConnection.sendPacket(packet);
-         });
-     }
+@@ -359,6 +366,8 @@ public class PlayerChunk {
+                     continue;
+                 }
+                 EntityPlayer player = (EntityPlayer)temp;
++                final Packet<?> packet = packetFunction.apply(player);
++                packet.process(player.playerConnection);
+                 if (!player.loadedChunks.contains(coordinate)) {
+                     continue;
+                 }
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
-index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c17924dd2567 100644
+index 7929fcc800064fa23b260c3ecbed75f846bb375a..293ebc003917225abc8f86de5a2a1508c1822fb3 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
-@@ -53,6 +53,7 @@ import org.bukkit.inventory.InventoryView;
- import org.bukkit.util.NumberConversions;
+@@ -1,5 +1,7 @@
+ package net.minecraft.server;
  
- import javax.annotation.Nullable;
++import co.aikar.timings.MinecraftTimings;
++import com.destroystokyo.paper.event.player.PlayerJumpEvent;
+ import com.google.common.primitives.Doubles;
+ import com.google.common.primitives.Floats;
+ import com.mojang.brigadier.ParseResults;
+@@ -9,19 +11,9 @@ import io.netty.util.concurrent.Future;
+ import io.netty.util.concurrent.GenericFutureListener;
+ import it.unimi.dsi.fastutil.ints.Int2ShortMap;
+ import it.unimi.dsi.fastutil.ints.Int2ShortOpenHashMap;
+-import java.util.Collections;
+-import java.util.Iterator;
+-import java.util.Optional;
+-import java.util.Set;
+-import javax.annotation.Nullable;
+-import org.apache.commons.lang3.StringEscapeUtils;
+ import org.apache.commons.lang3.StringUtils;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+-
+-// CraftBukkit start
+-import java.util.concurrent.ExecutionException;
+-import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+ import org.bukkit.Location;
+ import org.bukkit.craftbukkit.entity.CraftPlayer;
+ import org.bukkit.craftbukkit.event.CraftEventFactory;
+@@ -59,11 +51,20 @@ import org.bukkit.inventory.CraftingInventory;
+ import org.bukkit.inventory.EquipmentSlot;
+ import org.bukkit.inventory.InventoryView;
+ import org.bukkit.util.NumberConversions;
+-import com.destroystokyo.paper.event.player.IllegalPacketEvent; // Paper
+-import com.destroystokyo.paper.event.player.PlayerJumpEvent; // Paper
+-import co.aikar.timings.MinecraftTimings; // Paper
++
++import javax.annotation.Nullable;
 +import java.lang.reflect.Field;
- import java.util.Collections;
- import java.util.Iterator;
- import java.util.Optional;
-@@ -63,6 +64,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
- // CraftBukkit start
++import java.util.Collections;
++import java.util.Iterator;
++import java.util.Optional;
++import java.util.Set;
++import java.util.concurrent.ExecutionException;
++import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
++
++// CraftBukkit start
  // CraftBukkit end
  
 +
  public class PlayerConnection implements PacketListenerPlayIn {
  
      private static final Logger LOGGER = LogManager.getLogger();
-@@ -70,13 +72,51 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -71,13 +72,51 @@ public class PlayerConnection implements PacketListenerPlayIn {
      private final MinecraftServer minecraftServer;
      public EntityPlayer player;
      private int e;
@@ -360,7 +1963,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
      // CraftBukkit end
      private int j;
      private final Int2ShortMap k = new Int2ShortOpenHashMap();
-@@ -103,9 +143,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -104,9 +143,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
      private int receivedMovePackets;
      private int processedMovePackets;
      private static final int MAX_SIGN_LINE_LENGTH = Integer.getInteger("Paper.maxSignLength", 80);
@@ -375,7 +1978,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          this.minecraftServer = minecraftserver;
          this.networkManager = networkmanager;
          networkmanager.setPacketListener(this);
-@@ -121,7 +164,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -122,7 +164,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
      private int lastTick = MinecraftServer.currentTick;
      private int allowedPlayerTicks = 1;
      private int lastDropTick = MinecraftServer.currentTick;
@@ -384,7 +1987,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
      private int dropCount = 0;
      private static final int SURVIVAL_PLACE_DISTANCE_SQUARED = 6 * 6;
      private static final int CREATIVE_PLACE_DISTANCE_SQUARED = 7 * 7;
-@@ -151,8 +194,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -152,8 +194,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
          this.processedMovePackets = this.receivedMovePackets;
          if (this.B) {
              if (++this.C > 80) {
@@ -397,7 +2000,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  return;
              }
          } else {
-@@ -170,8 +215,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -171,8 +215,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
              this.x = this.r.locZ();
              if (this.D && this.player.getRootVehicle().getRidingPassenger() == this.player) {
                  if (++this.E > 80) {
@@ -410,7 +2013,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      return;
                  }
              } else {
-@@ -191,8 +238,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -192,8 +238,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
          long elapsedTime = currentTime - this.getLastPing();
  
          if (this.isPendingPing()) {
@@ -423,7 +2026,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  this.disconnect(new ChatMessage("disconnect.timeout", new Object[0]));
              }
          } else {
-@@ -208,8 +257,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -209,8 +257,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
          this.minecraftServer.getMethodProfiler().exit();
          // CraftBukkit start
@@ -437,7 +2040,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          /* Use thread-safe field access instead
          if (this.chatThrottle > 0) {
              --this.chatThrottle;
-@@ -221,7 +273,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -222,7 +273,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
              --this.j;
          }
  
@@ -448,7 +2051,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              this.player.resetIdleTimer(); // CraftBukkit - SPIGOT-854
              this.disconnect(new ChatMessage("multiplayer.disconnect.idling", new Object[0]));
          }
-@@ -237,8 +291,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -238,8 +291,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
          this.q = this.player.locZ();
      }
  
@@ -458,7 +2061,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          return this.networkManager;
      }
  
-@@ -247,8 +300,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -248,8 +300,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
      }
  
      // CraftBukkit start
@@ -468,7 +2071,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          disconnect(CraftChatMessage.fromComponent(ichatbasecomponent, EnumChatFormat.WHITE));
      }
      // CraftBukkit end
-@@ -260,7 +312,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -261,7 +312,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
          String leaveMessage = EnumChatFormat.YELLOW + this.player.getName() + " left the game.";
  
@@ -478,7 +2081,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
          if (this.server.getServer().isRunning()) {
              this.server.getPluginManager().callEvent(event);
-@@ -275,9 +328,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -276,9 +328,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
          // CraftBukkit end
          final ChatComponentText ichatbasecomponent = new ChatComponentText(s);
  
@@ -492,7 +2095,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          this.a(ichatbasecomponent); // CraftBukkit - fire quit instantly
          this.networkManager.stopReading();
          MinecraftServer minecraftserver = this.minecraftServer;
-@@ -288,29 +342,43 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -289,29 +342,43 @@ public class PlayerConnection implements PacketListenerPlayIn {
          minecraftserver.scheduleOnMain(networkmanager::handleDisconnection); // Paper
      }
  
@@ -547,7 +2150,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  WorldServer worldserver = this.player.getWorldServer();
                  double d0 = entity.locX();
                  double d1 = entity.locY();
-@@ -335,7 +403,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -336,7 +403,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  ++this.receivedMovePackets;
                  int i = this.receivedMovePackets - this.processedMovePackets;
                  if (i > Math.max(this.allowedPlayerTicks, 5)) {
@@ -558,7 +2161,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      i = 1;
                  }
  
-@@ -353,20 +423,28 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -354,20 +423,28 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  speed *= 2f; // TODO: Get the speed of the vehicle instead of the player
  
                  // Paper start - Prevent moving into unloaded chunks
@@ -592,7 +2195,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                  d6 = d3 - this.v;
                  d7 = d4 - this.w - 1.0E-6D;
-@@ -386,17 +464,21 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -387,17 +464,21 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
                  if (d10 > org.spigotmc.SpigotConfig.movedWronglyThreshold) { // Spigot
                      flag1 = true;
@@ -617,7 +2220,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      this.networkManager.sendPacket(new PacketPlayOutVehicleMove(entity));
                      return;
                  }
-@@ -404,8 +486,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -405,8 +486,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  // CraftBukkit start - fire PlayerMoveEvent
                  Player player = this.getPlayer();
                  // Spigot Start
@@ -627,7 +2230,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      lastPosX = curPos.getX();
                      lastPosY = curPos.getY();
                      lastPosZ = curPos.getZ();
-@@ -414,8 +495,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -415,8 +495,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
                      hasMoved = true;
                  }
                  // Spigot End
@@ -641,7 +2244,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                  // If the packet contains movement information then we update the To location with the correct XYZ.
                  to.setX(packetplayinvehiclemove.getX());
-@@ -428,8 +512,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -429,8 +512,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  to.setPitch(packetplayinvehiclemove.getPitch());
  
                  // Prevent 40 event-calls for less than a single pixel of movement >.>
@@ -655,7 +2258,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                  if ((delta > 1f / 256 || deltaAngle > 10f) && !this.player.isFrozen()) {
                      this.lastPosX = to.getX();
-@@ -454,7 +541,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -455,7 +541,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          // there to avoid any 'Moved wrongly' or 'Moved too quickly' errors.
                          // We only do this if the Event was not cancelled.
                          if (!oldTo.equals(event.getTo()) && !event.isCancelled()) {
@@ -665,7 +2268,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              return;
                          }
  
-@@ -469,8 +557,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -470,8 +557,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  // CraftBukkit end
  
                  this.player.getWorldServer().getChunkProvider().movePlayer(this.player);
@@ -678,7 +2281,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  this.v = entity.locX();
                  this.w = entity.locY();
                  this.x = entity.locZ();
-@@ -479,11 +569,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -480,11 +569,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
      }
  
@@ -697,7 +2300,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              this.o = this.teleportPos.x;
              this.p = this.teleportPos.y;
              this.q = this.teleportPos.z;
-@@ -497,11 +589,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -498,11 +589,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -714,7 +2317,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              RecipeBookServer recipebookserver = this.player.B();
  
              optional.ifPresent(recipebookserver::e);
-@@ -518,9 +611,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -519,9 +611,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -727,7 +2330,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          if (packetplayinadvancements.c() == PacketPlayInAdvancements.Status.OPENED_TAB) {
              MinecraftKey minecraftkey = packetplayinadvancements.d();
              Advancement advancement = this.minecraftServer.getAdvancementData().a(minecraftkey);
-@@ -532,12 +625,15 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -533,12 +625,15 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -747,7 +2350,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              return;
          }
          // CraftBukkit end
-@@ -551,38 +647,50 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -552,38 +647,50 @@ public class PlayerConnection implements PacketListenerPlayIn {
          com.destroystokyo.paper.event.server.AsyncTabCompleteEvent event;
          java.util.List<String> completions = new java.util.ArrayList<>();
          String buffer = packetplayintabcomplete.c();
@@ -814,11 +2417,11 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          if (!this.minecraftServer.getEnableCommandBlock()) {
              this.player.sendMessage(new ChatMessage("advMode.notEnabled", new Object[0]));
          } else if (!this.player.isCreativeAndOp()) {
-@@ -603,22 +711,33 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -604,22 +711,33 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
              if (commandblocklistenerabstract != null) {
                  TileEntityCommand.Type tileentitycommand_type = tileentitycommand.m();
--                EnumDirection enumdirection = (EnumDirection) this.player.world.getType(blockposition, this.player).get(BlockCommand.a);
+-                EnumDirection enumdirection = (EnumDirection) this.player.world.getType(blockposition).get(BlockCommand.a);
 +                EnumDirection enumdirection =
 +                    (EnumDirection) this.player.world.getType(blockposition, this.player)
 +                        .get(BlockCommand.a);
@@ -852,7 +2455,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  }
  
                  tileentity.r();
-@@ -636,22 +755,24 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -637,22 +755,24 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
                  commandblocklistenerabstract.e();
                  if (!UtilColor.b(s)) {
@@ -882,7 +2485,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
              if (commandblocklistenerabstract != null) {
                  commandblocklistenerabstract.setCommand(packetplayinsetcommandminecart.b());
-@@ -661,24 +782,30 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -662,24 +782,30 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  }
  
                  commandblocklistenerabstract.e();
@@ -925,7 +2528,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          if (this.player.activeContainer instanceof ContainerAnvil) {
              ContainerAnvil containeranvil = (ContainerAnvil) this.player.activeContainer;
              String s = SharedConstants.a(packetplayinitemname.b());
-@@ -690,18 +817,19 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -691,21 +817,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -951,8 +2554,12 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
 +            .ensureMainThread(packetplayinstruct, this, this.player.getWorldServer());
          if (this.player.isCreativeAndOp()) {
              BlockPosition blockposition = packetplayinstruct.b();
-             IBlockData iblockdata = this.player.world.getType(blockposition, this.player);
-@@ -727,27 +855,36 @@ public class PlayerConnection implements PacketListenerPlayIn {
+-            IBlockData iblockdata = this.player.world.getType(blockposition);
++            IBlockData iblockdata = this.player.world.getType(blockposition, this.player);
+             TileEntity tileentity = this.player.world.getTileEntity(blockposition);
+ 
+             if (tileentity instanceof TileEntityStructure) {
+@@ -728,27 +855,36 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
                      if (packetplayinstruct.c() == TileEntityStructure.UpdateType.SAVE_AREA) {
                          if (tileentitystructure.D()) {
@@ -997,7 +2604,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  }
  
                  tileentitystructure.update();
-@@ -757,9 +894,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -758,12 +894,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
      }
  
@@ -1009,8 +2616,12 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
 +            .ensureMainThread(packetplayinsetjigsaw, this, this.player.getWorldServer());
          if (this.player.isCreativeAndOp()) {
              BlockPosition blockposition = packetplayinsetjigsaw.b();
-             IBlockData iblockdata = this.player.world.getType(blockposition, this.player);
-@@ -778,15 +915,16 @@ public class PlayerConnection implements PacketListenerPlayIn {
+-            IBlockData iblockdata = this.player.world.getType(blockposition);
++            IBlockData iblockdata = this.player.world.getType(blockposition, this.player);
+             TileEntity tileentity = this.player.world.getTileEntity(blockposition);
+ 
+             if (tileentity instanceof TileEntityJigsaw) {
+@@ -779,15 +915,16 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
      }
  
@@ -1031,7 +2642,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
              containermerchant.d(i);
              containermerchant.g(i);
-@@ -794,19 +932,20 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -795,19 +932,20 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -1056,7 +2667,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  byteTotal += byteLength;
                  int length = testString.length();
                  int multibytes = 0;
-@@ -817,7 +956,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -818,7 +956,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          }
                      }
                  }
@@ -1067,7 +2678,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                  if (multibytes > 1) {
                      // penalize MB
-@@ -826,20 +967,26 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -827,20 +967,26 @@ public class PlayerConnection implements PacketListenerPlayIn {
              }
  
              if (byteTotal > byteAllowed) {
@@ -1097,7 +2708,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          // CraftBukkit end
          ItemStack itemstack = packetplayinbedit.b();
  
-@@ -847,7 +994,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -848,7 +994,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
              if (ItemBookAndQuill.b(itemstack.getTag())) {
                  ItemStack itemstack1 = this.player.b(packetplayinbedit.d());
  
@@ -1107,7 +2718,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      if (packetplayinbedit.c()) {
                          ItemStack itemstack2 = new ItemStack(Items.WRITTEN_BOOK);
                          NBTTagCompound nbttagcompound = itemstack1.getTag();
-@@ -856,25 +1004,32 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -857,25 +1004,32 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              itemstack2.setTag(nbttagcompound.clone());
                          }
  
@@ -1146,7 +2757,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                          // Paper end
                      }
                  }
-@@ -883,37 +1038,42 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -884,37 +1038,42 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
      }
  
@@ -1203,7 +2814,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          } else {
              WorldServer worldserver = this.minecraftServer.getWorldServer(this.player.dimension);
  
-@@ -925,13 +1085,17 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -926,13 +1085,17 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  if (this.teleportPos != null) {
                      if (this.e - this.A > 20) {
                          this.A = this.e;
@@ -1223,7 +2834,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                          this.player.getWorldServer().getChunkProvider().movePlayer(this.player);
                          this.allowedPlayerTicks = 20; // CraftBukkit
                      } else {
-@@ -946,9 +1110,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -947,9 +1110,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          double d1 = this.player.locY();
                          double d2 = this.player.locZ();
                          double d3 = this.player.locY();
@@ -1237,7 +2848,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                          float f = packetplayinflying.a(this.player.yaw);
                          float f1 = packetplayinflying.b(this.player.pitch);
                          double d7 = d4 - this.l;
-@@ -959,7 +1125,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -960,7 +1125,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
                          if (this.player.isSleeping()) {
                              if (d11 > 1.0D) {
@@ -1248,7 +2859,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              }
  
                          } else {
-@@ -967,12 +1135,15 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -968,12 +1135,15 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              int i = this.receivedMovePackets - this.processedMovePackets;
  
                              // CraftBukkit start - handle custom speeds and skipped ticks
@@ -1266,7 +2877,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                  i = 1;
                              }
  
-@@ -988,19 +1159,31 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -989,19 +1159,31 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                  speed = player.abilities.walkSpeed * 10f;
                              }
                              // Paper start - Prevent moving into unloaded chunks
@@ -1305,7 +2916,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                      return;
                                  }
                              }
-@@ -1017,8 +1200,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1018,8 +1200,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              if (this.player.onGround && !packetplayinflying.b() && d8 > 0.0D) {
                                  // Paper start - Add player jump event
                                  Player player = this.getPlayer();
@@ -1320,7 +2931,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                                  // If the packet contains movement information then we update the To location with the correct XYZ.
                                  if (packetplayinflying.hasPos) {
-@@ -1039,7 +1226,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1040,7 +1226,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                      this.player.jump();
                                  } else {
                                      from = event.getFrom();
@@ -1330,7 +2941,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                      return;
                                  }
                                  // Paper end
-@@ -1059,13 +1247,20 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1060,13 +1247,20 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              d11 = d7 * d7 + d8 * d8 + d9 * d9;
                              boolean flag1 = false;
  
@@ -1354,7 +2965,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              if (!this.player.noclip && !this.player.isSleeping()) {
                                  boolean flag2 = this.a((IWorldReader) worldserver);
  
-@@ -1080,8 +1275,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1081,8 +1275,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              this.player.setLocation(prevX, prevY, prevZ, prevYaw, prevPitch);
  
                              Player player = this.getPlayer();
@@ -1368,7 +2979,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                              // If the packet contains movement information then we update the To location with the correct XYZ.
                              if (packetplayinflying.hasPos) {
-@@ -1097,8 +1295,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1098,8 +1295,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              }
  
                              // Prevent 40 event-calls for less than a single pixel of movement >.>
@@ -1382,7 +2993,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                              if ((delta > 1f / 256 || deltaAngle > 10f) && !this.player.isFrozen()) {
                                  this.lastPosX = to.getX();
-@@ -1123,13 +1324,15 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1124,13 +1324,15 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                      // there to avoid any 'Moved wrongly' or 'Moved too quickly' errors.
                                      // We only do this if the Event was not cancelled.
                                      if (!oldTo.equals(event.getTo()) && !event.isCancelled()) {
@@ -1400,7 +3011,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                          this.justTeleported = false;
                                          return;
                                      }
-@@ -1138,7 +1341,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1139,7 +1341,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              this.player.setLocation(d4, d5, d6, f, f1); // Copied from above
  
                              // MC-135989, SPIGOT-5564: isRiptiding
@@ -1416,7 +3027,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              // CraftBukkit end
                              this.player.onGround = packetplayinflying.b();
                              this.player.getWorldServer().getChunkProvider().movePlayer(this.player);
-@@ -1154,23 +1364,30 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1155,23 +1364,30 @@ public class PlayerConnection implements PacketListenerPlayIn {
      }
  
      private boolean a(IWorldReader iworldreader) {
@@ -1453,7 +3064,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          Player player = this.getPlayer();
          Location from = player.getLocation();
  
-@@ -1187,7 +1404,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1188,7 +1404,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
              return;
          }
  
@@ -1463,7 +3074,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          this.server.getPluginManager().callEvent(event);
  
          if (event.isCancelled() || !to.equals(event.getTo())) {
-@@ -1204,10 +1422,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1205,10 +1422,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
      }
  
      public void teleport(Location dest) {
@@ -1476,9 +3087,9 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
 +    private void internalTeleport(double d0, double d1, double d2, float f, float f1,
 +        Set<PacketPlayOutPosition.EnumPlayerTeleportFlags> set) {
          if (player.dead) {
-             LOGGER.info("Attempt to teleport dead player %s restricted", player.getName());
+             LOGGER.info("Attempt to teleport dead player {} restricted", player.getName());
              return;
-@@ -1222,11 +1442,21 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1223,11 +1442,21 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
          this.justTeleported = true;
          // CraftBukkit end
@@ -1505,7 +3116,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
          this.teleportPos = new Vec3D(d0, d1, d2);
          if (++this.teleportAwait == Integer.MAX_VALUE) {
-@@ -1243,17 +1473,21 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1244,17 +1473,21 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
          this.A = this.e;
          this.player.setLocation(d0, d1, d2, f, f1);
@@ -1533,7 +3144,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
          switch (packetplayinblockdig_enumplayerdigtype) {
              case SWAP_HELD_ITEMS:
-@@ -1262,8 +1496,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1263,8 +1496,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
                      // CraftBukkit start - inspiration taken from DispenserRegistry (See SpigotCraft#394)
                      CraftItemStack mainHand = CraftItemStack.asCraftMirror(itemstack);
@@ -1547,7 +3158,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      this.server.getPluginManager().callEvent(swapItemsEvent);
                      if (swapItemsEvent.isCancelled()) {
                          return;
-@@ -1271,12 +1508,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1272,12 +1508,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
                      if (swapItemsEvent.getOffHandItem().equals(offHand)) {
                          this.player.a(EnumHand.OFF_HAND, this.player.b(EnumHand.MAIN_HAND));
                      } else {
@@ -1564,7 +3175,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      }
                      // CraftBukkit end
                  }
-@@ -1293,7 +1532,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1294,7 +1532,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          // Else we increment the drop count and check the amount.
                          this.dropCount++;
                          if (this.dropCount >= 20) {
@@ -1574,7 +3185,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              this.disconnect("You dropped your items too quickly (Hacking?)");
                              return;
                          }
-@@ -1316,11 +1556,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1317,11 +1556,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
              case ABORT_DESTROY_BLOCK:
              case STOP_DESTROY_BLOCK:
                  // Paper start - Don't allow digging in unloaded chunks
@@ -1591,7 +3202,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  return;
              default:
                  throw new IllegalArgumentException("Invalid player action");
-@@ -1330,10 +1573,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1331,10 +1573,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
      // Spigot start - limit place/interactions
      private int limitedPackets;
      private long lastLimitedPacket = -1;
@@ -1606,7 +3217,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              return false;
          }
  
-@@ -1347,11 +1592,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1348,49 +1592,71 @@ public class PlayerConnection implements PacketListenerPlayIn {
      }
      // Spigot end
  
@@ -1625,8 +3236,11 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          WorldServer worldserver = this.minecraftServer.getWorldServer(this.player.dimension);
          EnumHand enumhand = packetplayinuseitem.b();
          ItemStack itemstack = this.player.b(enumhand);
-@@ -1361,35 +1608,55 @@ public class PlayerConnection implements PacketListenerPlayIn {
-         IBlockData clickedBlock = worldserver.getType(blockposition, this.player); // Spigot
+         MovingObjectPositionBlock movingobjectpositionblock = packetplayinuseitem.c();
+         BlockPosition blockposition = movingobjectpositionblock.getBlockPosition();
+         EnumDirection enumdirection = movingobjectpositionblock.getDirection();
+-        IBlockData clickedBlock = worldserver.getType(blockposition); // Spigot
++        IBlockData clickedBlock = worldserver.getType(blockposition, this.player); // Spigot
  
          this.player.resetIdleTimer();
 -        if (blockposition.getY() >= this.minecraftServer.getMaxBuildHeight() - 1 && ((enumdirection == EnumDirection.UP && !(clickedBlock.getBlock() instanceof BlockStepAbstract && clickedBlock.get(BlockStepAbstract.a) == BlockPropertySlabType.BOTTOM)) || blockposition.getY() >= this.minecraftServer.getMaxBuildHeight())) { // Spigot
@@ -1696,7 +3310,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          WorldServer worldserver = this.minecraftServer.getWorldServer(this.player.dimension);
          EnumHand enumhand = packetplayinblockplace.b();
          ItemStack itemstack = this.player.b(enumhand);
-@@ -1411,21 +1678,31 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1412,21 +1678,31 @@ public class PlayerConnection implements PacketListenerPlayIn {
              float f6 = MathHelper.sin(-f1 * 0.017453292F);
              float f7 = f4 * f5;
              float f8 = f3 * f5;
@@ -1734,7 +3348,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      cancelled = event.useItemInHand() == Event.Result.DENY;
                  }
              }
-@@ -1435,7 +1712,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1436,7 +1712,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
              } else {
                  // Paper start
                  itemstack = this.player.getItemInHand(enumhand);
@@ -1744,7 +3358,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  // Paper end
                  this.player.playerInteractManager.a(this.player, worldserver, itemstack, enumhand);
              }
-@@ -1443,9 +1721,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1444,9 +1721,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
      }
  
@@ -1757,7 +3371,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          if (this.player.isSpectator()) {
              Iterator iterator = this.minecraftServer.getWorlds().iterator();
  
-@@ -1454,7 +1732,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1455,7 +1732,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  Entity entity = packetplayinspectate.a(worldserver);
  
                  if (entity != null) {
@@ -1769,7 +3383,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      return;
                  }
              }
-@@ -1465,18 +1746,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1466,18 +1746,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
      @Override
      // CraftBukkit start
      public void a(PacketPlayInResourcePackStatus packetplayinresourcepackstatus) {
@@ -1798,7 +3412,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          Entity entity = this.player.getVehicle();
  
          if (entity instanceof EntityBoat) {
-@@ -1485,8 +1770,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1486,8 +1770,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -1808,7 +3422,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          // CraftBukkit start - Rarely it would send a disconnect line twice
          if (this.processedDisconnect) {
              return;
-@@ -1494,7 +1778,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1495,7 +1778,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
              this.processedDisconnect = true;
          }
          // CraftBukkit end
@@ -1819,7 +3433,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          // CraftBukkit start - Replace vanilla quit message handling with our own.
          /*
          this.minecraftServer.invalidatePingSample();
-@@ -1504,7 +1790,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1505,7 +1790,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
          this.player.n();
          String quitMessage = this.minecraftServer.getPlayerList().disconnect(this.player);
          if ((quitMessage != null) && (quitMessage.length() > 0)) {
@@ -1829,7 +3443,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          }
          // CraftBukkit end
          if (this.isExemptPlayer()) {
-@@ -1514,16 +1801,28 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1515,16 +1801,28 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -1861,7 +3475,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  return;
              }
  
-@@ -1532,12 +1831,42 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1533,12 +1831,42 @@ public class PlayerConnection implements PacketListenerPlayIn {
              }
          }
  
@@ -1905,7 +3519,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          }
          // CraftBukkit end
  
-@@ -1554,15 +1883,27 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1555,15 +1883,27 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
      }
  
@@ -1940,7 +3554,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  this.player.resetIdleTimer();
                  return;
              }
-@@ -1570,13 +1911,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1571,13 +1911,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
              this.player.inventory.itemInHandIndex = packetplayinhelditemslot.b();
              this.player.resetIdleTimer();
          } else {
@@ -1957,7 +3571,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          // CraftBukkit start - async chat
          // SPIGOT-3638
          if (this.minecraftServer.isStopped()) {
-@@ -1585,11 +1926,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1586,11 +1926,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
          boolean isSync = packetplayinchat.b().startsWith("/");
          if (packetplayinchat.b().startsWith("/")) {
@@ -1975,7 +3589,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          } else {
              this.player.resetIdleTimer();
              String s = packetplayinchat.b();
-@@ -1601,9 +1945,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1602,9 +1945,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
                      // CraftBukkit start - threadsafety
                      if (!isSync) {
                          Waitable waitable = new Waitable() {
@@ -1989,7 +3603,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                  return null;
                              }
                          };
-@@ -1618,7 +1963,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1619,7 +1963,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              throw new RuntimeException(e);
                          }
                      } else {
@@ -1999,7 +3613,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      }
                      // CraftBukkit end
                      return;
-@@ -1638,12 +1984,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1639,12 +1984,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
              } else if (getPlayer().isConversing()) {
                  final String conversationInput = s;
                  this.minecraftServer.processQueue.add(new Runnable() {
@@ -2015,7 +3629,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  ChatMessage chatmessage = new ChatMessage("chat.cannotSend", new Object[0]);
  
                  chatmessage.getChatModifier().setColor(EnumChatFormat.RED);
-@@ -1652,17 +1998,16 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1653,17 +1998,16 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  this.chat(s, true);
                  // CraftBukkit end - the below is for reference. :)
              } else {
@@ -2037,7 +3651,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      counted = false;
                      break;
                  }
-@@ -1670,12 +2015,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1671,12 +2015,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
              // Spigot end
              // CraftBukkit start - replaced with thread safe throttle
              // this.chatThrottle += 20;
@@ -2055,7 +3669,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              return null;
                          }
                      };
-@@ -1708,11 +2054,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1709,11 +2054,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
              // Paper Start
              if (!org.spigotmc.AsyncCatcher.shuttingDown && !org.bukkit.Bukkit.isPrimaryThread()) {
                  final String fCommandLine = s;
@@ -2073,7 +3687,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                          chat(fCommandLine, false);
                          return null;
                      }
-@@ -1722,7 +2070,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1723,7 +2070,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                      wait.get();
                      return;
                  } catch (InterruptedException e) {
@@ -2083,7 +3697,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  } catch (Exception e) {
                      throw new RuntimeException("Exception processing chat command", e.getCause());
                  }
-@@ -1733,27 +2082,33 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1734,27 +2082,33 @@ public class PlayerConnection implements PacketListenerPlayIn {
              // Do nothing, this is coming from a plugin
          } else {
              Player player = this.getPlayer();
@@ -2124,7 +3738,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              }
                          } else {
                              for (Player player : queueEvent.getRecipients()) {
-@@ -1761,7 +2116,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1762,7 +2116,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              }
                          }
                          return null;
@@ -2134,7 +3748,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  if (async) {
                      minecraftServer.processQueue.add(waitable);
                  } else {
-@@ -1770,7 +2126,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1771,7 +2126,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  try {
                      waitable.get();
                  } catch (InterruptedException e) {
@@ -2144,7 +3758,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  } catch (ExecutionException e) {
                      throw new RuntimeException("Exception processing chat event", e.getCause());
                  }
-@@ -1782,9 +2139,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1783,9 +2139,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  // Paper Start - (Meh) Support for vanilla world scoreboard name coloring
                  String displayName = event.getPlayer().getDisplayName();
                  if (this.player.getWorld().paperConfig.useVanillaScoreboardColoring) {
@@ -2159,7 +3773,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  }
  
                  s = String.format(event.getFormat(), displayName, event.getMessage());
-@@ -1807,12 +2167,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1808,12 +2167,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
      private void handleCommand(String s) {
          MinecraftTimings.playerCommandTimer.startTiming(); // Paper
          // CraftBukkit start - whole method
@@ -2176,7 +3790,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          this.server.getPluginManager().callEvent(event);
  
          if (event.isCancelled()) {
-@@ -1825,8 +2186,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1826,8 +2186,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  return;
              }
          } catch (org.bukkit.command.CommandException ex) {
@@ -2189,7 +3803,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              return;
          } finally {
              MinecraftTimings.playerCommandTimer.stopTiming(); // Paper
-@@ -1835,10 +2198,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1836,10 +2198,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
          // CraftBukkit end
      }
  
@@ -2205,7 +3819,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          this.player.resetIdleTimer();
          // CraftBukkit start - Raytrace to look for 'rogue armswings'
          float f1 = this.player.pitch;
-@@ -1854,32 +2218,41 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1855,32 +2218,41 @@ public class PlayerConnection implements PacketListenerPlayIn {
          float f6 = MathHelper.sin(-f1 * 0.017453292F);
          float f7 = f4 * f5;
          float f8 = f3 * f5;
@@ -2257,7 +3871,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  this.server.getPluginManager().callEvent(event);
  
                  if (event.isCancelled()) {
-@@ -1888,7 +2261,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1889,7 +2261,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  break;
              case START_SPRINTING:
              case STOP_SPRINTING:
@@ -2268,7 +3882,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  this.server.getPluginManager().callEvent(e2);
  
                  if (e2.isCancelled()) {
-@@ -1904,11 +2279,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1905,11 +2279,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
              case PRESS_SHIFT_KEY:
                  this.player.setSneaking(true);
  
@@ -2285,7 +3899,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                  break;
              case RELEASE_SHIFT_KEY:
-@@ -1958,16 +2333,16 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1959,16 +2333,16 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -2309,7 +3923,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              return;
          }
          // Spigot End
-@@ -1984,46 +2359,74 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1985,46 +2359,74 @@ public class PlayerConnection implements PacketListenerPlayIn {
              if (this.player.h(entity) < d0) {
                  EnumHand enumhand;
  
@@ -2398,7 +4012,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      enumhand = packetplayinuseentity.c();
                      this.player.a(entity, enumhand);
                      // CraftBukkit start
-@@ -2031,9 +2434,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2032,9 +2434,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          this.player.updateInventory(this.player.activeContainer);
                      }
                      // CraftBukkit end
@@ -2412,7 +4026,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                      if (enuminteractionresult.b()) {
                          this.player.a(enumhand, true);
-@@ -2043,10 +2448,17 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2044,10 +2448,17 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          this.player.updateInventory(this.player.activeContainer);
                      }
                      // CraftBukkit end
@@ -2434,7 +4048,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                          return;
                      }
  
-@@ -2062,38 +2474,45 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2063,38 +2474,45 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
          // Paper start - fire event
          else {
@@ -2494,7 +4108,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      }
                  }
                  break;
-@@ -2103,22 +2522,27 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2104,22 +2522,27 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -2532,7 +4146,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              boolean cancelled = this.player.isSpectator(); // CraftBukkit - see below if
              if (false/*this.player.isSpectator()*/) { // CraftBukkit
                  NonNullList<ItemStack> nonnulllist = NonNullList.a();
-@@ -2154,42 +2578,61 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2155,42 +2578,61 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              action = InventoryAction.NOTHING; // Don't want to repeat ourselves
                              if (packetplayinwindowclick.c() == -999) {
                                  if (!player.inventory.getCarried().isEmpty()) {
@@ -2607,7 +4221,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                                      // As of 1.5, this is result slots only
                                                      action = InventoryAction.PICKUP_ALL;
                                                  }
-@@ -2211,7 +2654,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2212,7 +2654,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              if (packetplayinwindowclick.c() < 0) {
                                  action = InventoryAction.NOTHING;
                              } else {
@@ -2617,7 +4231,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                  if (slot != null && slot.isAllowed(this.player) && slot.hasItem()) {
                                      action = InventoryAction.MOVE_TO_OTHER_INVENTORY;
                                  } else {
-@@ -2223,17 +2667,23 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2224,17 +2667,23 @@ public class PlayerConnection implements PacketListenerPlayIn {
                      case SWAP:
                          if (packetplayinwindowclick.d() >= 0 && packetplayinwindowclick.d() < 9) {
                              click = ClickType.NUMBER_KEY;
@@ -2645,7 +4259,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                      action = InventoryAction.HOTBAR_SWAP;
                                  } else {
                                      action = InventoryAction.NOTHING;
-@@ -2249,8 +2699,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2250,8 +2699,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              if (packetplayinwindowclick.c() < 0) {
                                  action = InventoryAction.NOTHING;
                              } else {
@@ -2659,7 +4273,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                      action = InventoryAction.CLONE_STACK;
                                  } else {
                                      action = InventoryAction.NOTHING;
-@@ -2265,16 +2718,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2266,16 +2718,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          if (packetplayinwindowclick.c() >= 0) {
                              if (packetplayinwindowclick.d() == 0) {
                                  click = ClickType.DROP;
@@ -2686,7 +4300,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                      action = InventoryAction.DROP_ALL_SLOT;
                                  } else {
                                      action = InventoryAction.NOTHING;
-@@ -2290,16 +2749,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2291,16 +2749,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          }
                          break;
                      case QUICK_CRAFT:
@@ -2712,7 +4326,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                  action = InventoryAction.COLLECT_TO_CURSOR;
                              }
                          }
-@@ -2310,9 +2775,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2311,9 +2775,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
                  if (packetplayinwindowclick.g() != InventoryClickType.QUICK_CRAFT) {
                      if (click == ClickType.NUMBER_KEY) {
@@ -2728,7 +4342,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                      }
  
                      org.bukkit.inventory.Inventory top = inventory.getTopInventory();
-@@ -2320,9 +2789,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2321,9 +2789,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          org.bukkit.inventory.Recipe recipe = ((CraftingInventory) top).getRecipe();
                          if (recipe != null) {
                              if (click == ClickType.NUMBER_KEY) {
@@ -2743,7 +4357,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              }
                          }
                      }
-@@ -2337,7 +2809,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2338,7 +2809,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
                      switch (event.getResult()) {
                          case ALLOW:
                          case DEFAULT:
@@ -2754,7 +4368,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                              break;
                          case DENY:
                              /* Needs enum constructor in InventoryAction
-@@ -2369,19 +2843,31 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2370,19 +2843,31 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                  case PLACE_SOME:
                                  case PLACE_ONE:
                                  case SWAP_WITH_CURSOR:
@@ -2790,7 +4404,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                                      break;
                                  // Nothing
                                  case NOTHING:
-@@ -2398,19 +2884,24 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2399,19 +2884,24 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  }
                  // CraftBukkit end
                  if (ItemStack.matches(packetplayinwindowclick.f(), itemstack)) {
@@ -2818,7 +4432,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
  
                          nonnulllist1.add(itemstack1.isEmpty() ? ItemStack.a : itemstack1);
                      }
-@@ -2422,39 +2913,50 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2423,39 +2913,50 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -2886,7 +4500,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  TileEntity tileentity = this.player.world.getTileEntity(blockposition);
  
                  if (tileentity != null) {
-@@ -2467,51 +2969,64 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2468,51 +2969,64 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  }
              }
  
@@ -2972,7 +4586,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  }
  
                  this.player.defaultContainer.a(this.player, true);
-@@ -2524,22 +3039,27 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2525,28 +3039,33 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -3009,7 +4623,14 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          this.player.resetIdleTimer();
          WorldServer worldserver = this.minecraftServer.getWorldServer(this.player.dimension);
          BlockPosition blockposition = packetplayinupdatesign.b();
-@@ -2554,8 +3074,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
+ 
+         if (worldserver.isLoaded(blockposition)) {
+-            IBlockData iblockdata = worldserver.getType(blockposition);
++            IBlockData iblockdata = worldserver.getType(blockposition, this.player);
+             TileEntity tileentity = worldserver.getTileEntity(blockposition);
+ 
+             if (!(tileentity instanceof TileEntitySign)) {
+@@ -2555,8 +3074,10 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
              TileEntitySign tileentitysign = (TileEntitySign) tileentity;
  
@@ -3022,7 +4643,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  this.sendPacket(tileentity.getUpdatePacket()); // CraftBukkit
                  return;
              }
-@@ -2573,21 +3095,27 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2574,21 +3095,27 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  // Paper start - cap line length - modified clients can send longer data than normal
                  if (MAX_SIGN_LINE_LENGTH > 0 && astring[i].length() > MAX_SIGN_LINE_LENGTH) {
                      // This handles multibyte characters as 1
@@ -3055,7 +4676,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              // CraftBukkit end
  
              tileentitysign.update();
-@@ -2596,8 +3124,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2597,8 +3124,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -3065,7 +4686,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          //PlayerConnectionUtils.ensureMainThread(packetplayinkeepalive, this, this.player.getWorldServer()); // CraftBukkit // Paper - This shouldn't be on the main thread
          if (this.awaitingKeepAlive && packetplayinkeepalive.b() == this.h) {
              int i = (int) (SystemUtils.getMonotonicMillis() - this.lastKeepAlive);
-@@ -2614,15 +3141,19 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2615,15 +3141,19 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
      }
  
@@ -3091,7 +4712,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              } else {
                  this.player.updateAbilities(); // Tell the player their ability was reverted
              }
-@@ -2630,9 +3161,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2631,9 +3161,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
          // CraftBukkit end
      }
  
@@ -3104,7 +4725,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
          this.player.a(packetplayinsettings);
      }
  
-@@ -2640,12 +3171,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2641,12 +3171,13 @@ public class PlayerConnection implements PacketListenerPlayIn {
      private static final MinecraftKey CUSTOM_REGISTER = new MinecraftKey("register");
      private static final MinecraftKey CUSTOM_UNREGISTER = new MinecraftKey("unregister");
  
@@ -3122,7 +4743,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  for (String channel : channels.split("\0")) {
                      getPlayer().addChannel(channel);
                  }
-@@ -2655,7 +3187,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2656,7 +3187,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
              }
          } else if (packetplayincustompayload.tag.equals(CUSTOM_UNREGISTER)) {
              try {
@@ -3132,7 +4753,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
                  for (String channel : channels.split("\0")) {
                      getPlayer().removeChannel(channel);
                  }
-@@ -2667,7 +3200,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2668,7 +3200,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
              try {
                  byte[] data = new byte[packetplayincustompayload.data.readableBytes()];
                  packetplayincustompayload.data.readBytes(data);
@@ -3142,7 +4763,7 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              } catch (Exception ex) {
                  PlayerConnection.LOGGER.error("Couldn\'t dispatch custom payload", ex);
                  this.disconnect("Invalid custom payload!");
-@@ -2677,21 +3211,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -2678,21 +3211,22 @@ public class PlayerConnection implements PacketListenerPlayIn {
      }
  
      public final boolean isDisconnected() {
@@ -3173,10 +4794,72 @@ index 7ec7d8399759c3dbd36e2ddcea224267d1c45078..787e35b2dd3412858def7d28cc45c179
              this.minecraftServer.d(packetplayindifficultylock.b());
          }
 diff --git a/src/main/java/net/minecraft/server/PlayerInteractManager.java b/src/main/java/net/minecraft/server/PlayerInteractManager.java
-index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9fa8921523 100644
+index 1b60310bb01aa0c361005ccecccf3cdccd4aa72b..7eff76d6b19044bb8b8ca950f3550c9fa8921523 100644
 --- a/src/main/java/net/minecraft/server/PlayerInteractManager.java
 +++ b/src/main/java/net/minecraft/server/PlayerInteractManager.java
-@@ -162,10 +162,10 @@ public class PlayerInteractManager {
+@@ -1,16 +1,18 @@
+ package net.minecraft.server;
+ 
+-import java.util.Objects;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+-// CraftBukkit start
+-import java.util.ArrayList;
+ import org.bukkit.craftbukkit.block.CraftBlock;
+-import org.bukkit.event.block.BlockBreakEvent;
+ import org.bukkit.craftbukkit.event.CraftEventFactory;
+ import org.bukkit.event.Event;
+ import org.bukkit.event.block.Action;
++import org.bukkit.event.block.BlockBreakEvent;
+ import org.bukkit.event.player.PlayerInteractEvent;
++
++import java.util.ArrayList;
++import java.util.Objects;
++
++// CraftBukkit start
+ // CraftBukkit end
+ 
+ public class PlayerInteractManager {
+@@ -84,7 +86,7 @@ public class PlayerInteractManager {
+         IBlockData iblockdata;
+ 
+         if (this.i) {
+-            iblockdata = this.world.getType(this.j);
++            iblockdata = this.world.getType(this.j, this.player);
+             if (iblockdata.isAir()) {
+                 this.i = false;
+             } else {
+@@ -96,7 +98,7 @@ public class PlayerInteractManager {
+                 }
+             }
+         } else if (this.e) {
+-            iblockdata = this.world.getType(this.g);
++            iblockdata = this.world.getType(this.g, this.player);
+             if (iblockdata.isAir()) {
+                 this.world.a(this.player.getId(), this.g, -1);
+                 this.l = -1;
+@@ -134,9 +136,9 @@ public class PlayerInteractManager {
+         double d3 = d0 * d0 + d1 * d1 + d2 * d2;
+ 
+         if (d3 > 36.0D) {
+-            this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition), packetplayinblockdig_enumplayerdigtype, false, "too far"));
++            this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition, this.player), packetplayinblockdig_enumplayerdigtype, false, "too far"));
+         } else if (blockposition.getY() >= i) {
+-            this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition), packetplayinblockdig_enumplayerdigtype, false, "too high"));
++            this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition, this.player), packetplayinblockdig_enumplayerdigtype, false, "too high"));
+         } else {
+             IBlockData iblockdata;
+ 
+@@ -144,7 +146,7 @@ public class PlayerInteractManager {
+                 if (!this.world.a((EntityHuman) this.player, blockposition)) {
+                     // CraftBukkit start - fire PlayerInteractEvent
+                     CraftEventFactory.callPlayerInteractEvent(this.player, Action.LEFT_CLICK_BLOCK, blockposition, enumdirection, this.player.inventory.getItemInHand(), EnumHand.MAIN_HAND);
+-                    this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition), packetplayinblockdig_enumplayerdigtype, false, "may not interact"));
++                    this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition, this.player), packetplayinblockdig_enumplayerdigtype, false, "may not interact"));
+                     // Update any tile entity data for this block
+                     TileEntity tileentity = world.getTileEntity(blockposition);
+                     if (tileentity != null) {
+@@ -160,10 +162,10 @@ public class PlayerInteractManager {
                      // Let the client know the block still exists
                      // Paper start - brute force neighbor blocks for any attached blocks
                      for (EnumDirection dir : EnumDirection.values()) {
@@ -3189,7 +4872,34 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
                      // Update any tile entity data for this block
                      TileEntity tileentity = this.world.getTileEntity(blockposition);
                      if (tileentity != null) {
-@@ -202,10 +202,10 @@ public class PlayerInteractManager {
+@@ -177,14 +179,14 @@ public class PlayerInteractManager {
+                     if (!this.world.douseFire((EntityHuman) null, blockposition, enumdirection)) {
+                         this.a(blockposition, packetplayinblockdig_enumplayerdigtype, "creative destroy");
+                     } else {
+-                        this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition), packetplayinblockdig_enumplayerdigtype, true, "fire put out"));
++                        this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition, this.player), packetplayinblockdig_enumplayerdigtype, true, "fire put out"));
+                     }
+ 
+                     return;
+                 }
+ 
+                 if (this.player.a((World) this.world, blockposition, this.gamemode)) {
+-                    this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition), packetplayinblockdig_enumplayerdigtype, false, "block action restricted"));
++                    this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(blockposition, this.world.getType(blockposition, this.player), packetplayinblockdig_enumplayerdigtype, false, "block action restricted"));
+                     return;
+                 }
+ 
+@@ -192,18 +194,18 @@ public class PlayerInteractManager {
+                 this.lastDigTick = this.currentTick; this.lastDigTime = System.nanoTime(); // Tuinity - lag compensate block breaking
+                 float f = 1.0F;
+ 
+-                iblockdata = this.world.getType(blockposition);
++                iblockdata = this.world.getType(blockposition, player);
+                 // CraftBukkit start - Swings at air do *NOT* exist.
+                 if (event.useInteractedBlock() == Event.Result.DENY) {
+                     // If we denied a door from opening, we need to send a correcting update to the client, as it already opened the door.
+-                    IBlockData data = this.world.getType(blockposition);
++                    IBlockData data = this.world.getType(blockposition, player);
                      if (data.getBlock() instanceof BlockDoor) {
                          // For some reason *BOTH* the bottom/top part have to be marked updated.
                          boolean bottom = data.get(BlockDoor.HALF) == BlockPropertyDoubleBlockHalf.LOWER;
@@ -3203,7 +4913,7 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
                      }
                  } else if (!iblockdata.isAir()) {
                      iblockdata.attack(this.world, blockposition, this.player);
-@@ -217,7 +217,7 @@ public class PlayerInteractManager {
+@@ -215,7 +217,7 @@ public class PlayerInteractManager {
                  if (event.useItemInHand() == Event.Result.DENY) {
                      // If we 'insta destroyed' then the client needs to be informed.
                      if (f > 1.0f) {
@@ -3212,7 +4922,7 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
                      }
                      return;
                  }
-@@ -225,7 +225,7 @@ public class PlayerInteractManager {
+@@ -223,7 +225,7 @@ public class PlayerInteractManager {
  
                  if (blockEvent.isCancelled()) {
                      // Let the client know the block still exists
@@ -3221,7 +4931,25 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
                      return;
                  }
  
-@@ -273,7 +273,7 @@ public class PlayerInteractManager {
+@@ -236,7 +238,7 @@ public class PlayerInteractManager {
+                     this.a(blockposition, packetplayinblockdig_enumplayerdigtype, "insta mine");
+                 } else {
+                     if (this.e) {
+-                        this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(this.g, this.world.getType(this.g), PacketPlayInBlockDig.EnumPlayerDigType.START_DESTROY_BLOCK, false, "abort destroying since another started (client insta mine, server disagreed)"));
++                        this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(this.g, this.world.getType(this.g, this.player), PacketPlayInBlockDig.EnumPlayerDigType.START_DESTROY_BLOCK, false, "abort destroying since another started (client insta mine, server disagreed)"));
+                     }
+ 
+                     this.e = true;
+@@ -251,7 +253,7 @@ public class PlayerInteractManager {
+                 if (blockposition.equals(this.g)) {
+                     int k = this.getTimeDiggingLagCompensate(); // Tuinity - lag compensate block breaking
+ 
+-                    iblockdata = this.world.getType(blockposition);
++                    iblockdata = this.world.getType(blockposition, player);
+                     if (!iblockdata.isAir()) {
+                         float f1 = iblockdata.getDamage(this.player, this.player.world, blockposition) * (float) (k + 1);
+ 
+@@ -271,13 +273,13 @@ public class PlayerInteractManager {
                      }
                  }
  
@@ -3230,7 +4958,14 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
              } else if (packetplayinblockdig_enumplayerdigtype == PacketPlayInBlockDig.EnumPlayerDigType.ABORT_DESTROY_BLOCK) {
                  this.e = false;
                  if (!Objects.equals(this.g, blockposition)) {
-@@ -293,9 +293,9 @@ public class PlayerInteractManager {
+                     PlayerInteractManager.LOGGER.debug("Mismatch in destroy block pos: " + this.g + " " + blockposition); // CraftBukkit - SPIGOT-5457 sent by client when interact event cancelled
+                     this.world.a(this.player.getId(), this.g, -1);
+-                    this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(this.g, this.world.getType(this.g), packetplayinblockdig_enumplayerdigtype, true, "aborted mismatched destroying"));
++                    this.player.playerConnection.sendPacket(new PacketPlayOutBlockBreak(this.g, this.world.getType(this.g, this.player), packetplayinblockdig_enumplayerdigtype, true, "aborted mismatched destroying"));
+                 }
+ 
+                 this.world.a(this.player.getId(), blockposition, -1);
+@@ -291,15 +293,15 @@ public class PlayerInteractManager {
  
      public void a(BlockPosition blockposition, PacketPlayInBlockDig.EnumPlayerDigType packetplayinblockdig_enumplayerdigtype, String s) {
          if (this.breakBlock(blockposition)) {
@@ -3242,7 +4977,14 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
          }
  
      }
-@@ -313,7 +313,7 @@ public class PlayerInteractManager {
+ 
+     public boolean breakBlock(BlockPosition blockposition) {
+-        IBlockData iblockdata = this.world.getType(blockposition);
++        IBlockData iblockdata = this.world.getType(blockposition, player);
+         // CraftBukkit start - fire BlockBreakEvent
+         org.bukkit.block.Block bblock = CraftBlock.at(world, blockposition);
+         BlockBreakEvent event = null;
+@@ -311,7 +313,7 @@ public class PlayerInteractManager {
              // Tell client the block is gone immediately then process events
              // Don't tell the client if its a creative sword break because its not broken!
              if (world.getTileEntity(blockposition) == null && !isSwordNoBreak) {
@@ -3251,7 +4993,16 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
                  packet.block = Blocks.AIR.getBlockData();
                  this.player.playerConnection.sendPacket(packet);
              }
-@@ -340,11 +340,11 @@ public class PlayerInteractManager {
+@@ -322,7 +324,7 @@ public class PlayerInteractManager {
+             event.setCancelled(isSwordNoBreak);
+ 
+             // Calculate default block experience
+-            IBlockData nmsData = this.world.getType(blockposition);
++            IBlockData nmsData = this.world.getType(blockposition, player);
+             Block nmsBlock = nmsData.getBlock();
+ 
+             ItemStack itemstack = this.player.getEquipment(EnumItemSlot.MAINHAND);
+@@ -338,11 +340,11 @@ public class PlayerInteractManager {
                      return false;
                  }
                  // Let the client know the block still exists
@@ -3265,7 +5016,25 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
                  }
  
                  // Update any tile entity data for this block
-@@ -476,7 +476,7 @@ public class PlayerInteractManager {
+@@ -358,7 +360,7 @@ public class PlayerInteractManager {
+         if (false && !this.player.getItemInMainHand().getItem().a(iblockdata, (World) this.world, blockposition, (EntityHuman) this.player)) { // CraftBukkit - false
+             return false;
+         } else {
+-            iblockdata = this.world.getType(blockposition); // CraftBukkit - update state from plugins
++            iblockdata = this.world.getType(blockposition, player); // CraftBukkit - update state from plugins
+             if (iblockdata.isAir()) return false; // CraftBukkit - A plugin set block to air without cancelling
+             TileEntity tileentity = this.world.getTileEntity(blockposition);
+             Block block = iblockdata.getBlock();
+@@ -453,7 +455,7 @@ public class PlayerInteractManager {
+     public boolean firedInteract = false;
+     public EnumInteractionResult a(EntityHuman entityhuman, World world, ItemStack itemstack, EnumHand enumhand, MovingObjectPositionBlock movingobjectpositionblock) {
+         BlockPosition blockposition = movingobjectpositionblock.getBlockPosition();
+-        IBlockData iblockdata = world.getType(blockposition);
++        IBlockData iblockdata = world.getType(blockposition, player);
+         EnumInteractionResult enuminteractionresult = EnumInteractionResult.PASS;
+         boolean cancelledBlock = false;
+ 
+@@ -474,7 +476,7 @@ public class PlayerInteractManager {
              // If we denied a door from opening, we need to send a correcting update to the client, as it already opened the door.
              if (iblockdata.getBlock() instanceof BlockDoor) {
                  boolean bottom = iblockdata.get(BlockDoor.HALF) == BlockPropertyDoubleBlockHalf.LOWER;
@@ -3274,7 +5043,7 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
              } else if (iblockdata.getBlock() instanceof BlockCake) {
                  ((EntityPlayer) entityhuman).getBukkitEntity().sendHealthUpdate(); // SPIGOT-1341 - reset health for cake
              // Paper start  - extend Player Interact cancellation // TODO: consider merging this into the extracted method
-@@ -486,11 +486,11 @@ public class PlayerInteractManager {
+@@ -484,11 +486,11 @@ public class PlayerInteractManager {
                      ((EntityPlayer) entityhuman).playerConnection.sendPacket(new PacketPlayOutCloseWindow());
              } else if (iblockdata.getBlock() instanceof BlockFlowerPot) {
                  // Send a block change to air and then send back the correct block, just to make the client happy
@@ -3288,13 +5057,350 @@ index fd15ef2c9e2b53181dbd70a0b9097fb26c3b0eee..7eff76d6b19044bb8b8ca950f3550c9f
  
                  TileEntity tileentity = this.world.getTileEntity(blockposition);
                  if (tileentity != null) {
+diff --git a/src/main/java/net/minecraft/server/ProtoChunk.java b/src/main/java/net/minecraft/server/ProtoChunk.java
+index 5a883aac14052f6637acbf4cf96236936fee98c3..d75458abe3affc0986969761e15e520e77b03c56 100644
+--- a/src/main/java/net/minecraft/server/ProtoChunk.java
++++ b/src/main/java/net/minecraft/server/ProtoChunk.java
+@@ -6,6 +6,10 @@ import com.google.common.collect.Sets;
+ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import it.unimi.dsi.fastutil.shorts.ShortList;
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import javax.annotation.Nullable;
+ import java.util.BitSet;
+ import java.util.Collection;
+ import java.util.Collections;
+@@ -13,12 +17,9 @@ import java.util.EnumSet;
+ import java.util.Iterator;
+ import java.util.List;
+ import java.util.Map;
+-import java.util.Set;
+ import java.util.Map.Entry;
++import java.util.Set;
+ import java.util.stream.Stream;
+-import javax.annotation.Nullable;
+-import org.apache.logging.log4j.LogManager;
+-import org.apache.logging.log4j.Logger;
+ 
+ public class ProtoChunk implements IChunkAccess {
+ 
+@@ -106,6 +107,21 @@ public class ProtoChunk implements IChunkAccess {
+ 
+     @Override
+     public IBlockData getType(BlockPosition blockposition) {
++        // Servett Start
++        if (world instanceof World) {
++            final World world = (World) this.world;
++            synchronized (world.tickingPlayerLock) {
++                if (world.tickingPlayer != null) {
++                    final Chunk.PlayerBlockModification playerBlockModification =
++                        world.tickingPlayer.modifiedBlocks.get(blockposition.asLong());
++                    if (playerBlockModification != null) {
++                        return playerBlockModification.getModifiedBlock();
++                    }
++                }
++            }
++        }
++        // Servett End
++
+         int i = blockposition.getY();
+ 
+         if (World.b(i)) {
+@@ -117,6 +133,27 @@ public class ProtoChunk implements IChunkAccess {
+         }
+     }
+ 
++    // Servett Start
++    @Override
++    public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
++        final Chunk.PlayerBlockModification playerBlockModification =
++            tickingPlayer.modifiedBlocks.get(position.asLong());
++        if (playerBlockModification != null) {
++            return playerBlockModification.getModifiedBlock();
++        }
++
++        int i = position.getY();
++
++        if (World.b(i)) {
++            return Blocks.VOID_AIR.getBlockData();
++        } else {
++            ChunkSection chunksection = this.getSections()[i >> 4];
++
++            return ChunkSection.a(chunksection) ? Blocks.AIR.getBlockData() : chunksection.getType(position.getX() & 15, i & 15, position.getZ() & 15);
++        }
++    }
++    // Servett End
++
+     @Override
+     public Fluid getFluid(BlockPosition blockposition) {
+         int i = blockposition.getY();
+@@ -215,7 +252,7 @@ public class ProtoChunk implements IChunkAccess {
+ 
+     public ChunkSection a(int i) {
+         if (this.j[i] == Chunk.a) {
+-            this.j[i] = new ChunkSection(i << 4, this, this.world, true); // Paper - Anti-Xray
++            this.j[i] = new ChunkSection((World) world, i << 4, this, this.world, true); // Paper - Anti-Xray
+         }
+ 
+         return this.j[i];
+diff --git a/src/main/java/net/minecraft/server/RegionLimitedWorldAccess.java b/src/main/java/net/minecraft/server/RegionLimitedWorldAccess.java
+index 9d0e8c2d43ba56d53bc30c0a3e2d7d170d8be474..6a7258e173557658cdf5e520c3254c60746330db 100644
+--- a/src/main/java/net/minecraft/server/RegionLimitedWorldAccess.java
++++ b/src/main/java/net/minecraft/server/RegionLimitedWorldAccess.java
+@@ -1,12 +1,13 @@
+ package net.minecraft.server;
+ 
++import org.apache.logging.log4j.LogManager;
++import org.apache.logging.log4j.Logger;
++
++import javax.annotation.Nullable;
+ import java.util.Collections;
+ import java.util.List;
+ import java.util.Random;
+ import java.util.function.Predicate;
+-import javax.annotation.Nullable;
+-import org.apache.logging.log4j.LogManager;
+-import org.apache.logging.log4j.Logger;
+ 
+ public class RegionLimitedWorldAccess implements GeneratorAccess {
+ 
+@@ -130,9 +131,32 @@ public class RegionLimitedWorldAccess implements GeneratorAccess {
+ 
+     @Override
+     public IBlockData getType(BlockPosition blockposition) {
++        // Servett Start
++        synchronized (f.tickingPlayerLock) {
++            if (f.tickingPlayer != null) {
++                Chunk.PlayerBlockModification playerBlockModification =
++                    f.tickingPlayer.modifiedBlocks.get(blockposition.asLong());
++                if (playerBlockModification != null) {
++                    return playerBlockModification.getModifiedBlock();
++                }
++            }
++        }
++        // Servett End
+         return this.getChunkAt(blockposition.getX() >> 4, blockposition.getZ() >> 4).getType(blockposition);
+     }
+ 
++    // Servett Start
++    @Override public
++    IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
++        Chunk.PlayerBlockModification playerBlockModification
++            = tickingPlayer.modifiedBlocks.get(position.asLong());
++        if (playerBlockModification != null) {
++            return playerBlockModification.getModifiedBlock();
++        }
++        return this.getChunkAt(position.getX() >> 4, position.getZ() >> 4).getType(position);
++    }
++    // Servett End
++
+     @Override
+     public Fluid getFluid(BlockPosition blockposition) {
+         return this.x(blockposition).getFluid(blockposition);
+diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
+index 5f69a018d98c0c3ffc2152fefada495d0c5fb976..7abaf52cd3aebd0047baa876dde3192001890e1c 100644
+--- a/src/main/java/net/minecraft/server/World.java
++++ b/src/main/java/net/minecraft/server/World.java
+@@ -1,37 +1,34 @@
+ package net.minecraft.server;
+ 
+-import co.aikar.timings.Timing;
+-import co.aikar.timings.Timings;
+-import com.destroystokyo.paper.antixray.ChunkPacketBlockController; // Paper - Anti-Xray
+-import com.destroystokyo.paper.antixray.ChunkPacketBlockControllerAntiXray; // Paper - Anti-Xray
++import com.destroystokyo.paper.antixray.ChunkPacketBlockController;
++import com.destroystokyo.paper.antixray.ChunkPacketBlockControllerAntiXray;
+ import com.destroystokyo.paper.event.server.ServerExceptionEvent;
+ import com.destroystokyo.paper.exception.ServerInternalException;
+-import com.google.common.base.MoreObjects;
+ import com.google.common.collect.Lists;
+-import java.io.IOException;
+-import java.util.Collection;
+-import java.util.Iterator;
+-import java.util.List;
+-import java.util.Random;
+-import java.util.function.BiFunction;
+-import java.util.function.Consumer;
+-import java.util.function.Predicate;
+-import javax.annotation.Nullable;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ import org.apache.logging.log4j.util.Supplier;
+-
+-// CraftBukkit start
+-import java.util.HashMap;
+-import java.util.Map;
+ import org.bukkit.Bukkit;
+-import org.bukkit.block.BlockState;
+ import org.bukkit.craftbukkit.CraftServer;
+ import org.bukkit.craftbukkit.CraftWorld;
+ import org.bukkit.craftbukkit.block.CapturedBlockState;
+ import org.bukkit.craftbukkit.block.CraftBlockState;
+ import org.bukkit.craftbukkit.block.data.CraftBlockData;
+ import org.bukkit.event.block.BlockPhysicsEvent;
++
++import javax.annotation.Nullable;
++import java.io.IOException;
++import java.util.Collection;
++import java.util.HashMap;
++import java.util.Iterator;
++import java.util.List;
++import java.util.Map;
++import java.util.Random;
++import java.util.function.BiFunction;
++import java.util.function.Consumer;
++import java.util.function.Predicate;
++
++// CraftBukkit start
+ // CraftBukkit end
+ 
+ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -60,6 +57,11 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+     private final WorldBorder worldBorder;
+     private final BiomeManager biomeManager;
+ 
++    // Servett Start
++    public EntityPlayer tickingPlayer;
++    public final java.lang.Object tickingPlayerLock = new Object();
++    // Servett End
++
+     // CraftBukkit start Added the following
+     private final CraftWorld world;
+     public boolean pvpMode;
+@@ -645,6 +647,18 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+ 
+     @Override
+     public IBlockData getType(BlockPosition blockposition) {
++        // Servett Start
++        synchronized (tickingPlayerLock) {
++            if (tickingPlayer != null) {
++                Chunk.PlayerBlockModification playerBlockModification =
++                    tickingPlayer.modifiedBlocks.get(blockposition.asLong());
++                if (playerBlockModification != null) {
++                    return playerBlockModification.getModifiedBlock();
++                }
++            }
++        }
++        // Servett End
++
+         // CraftBukkit start - tree generation
+         if (captureTreeGeneration) {
+             CraftBlockState previous = capturedBlockStates.get(blockposition); // Paper
+@@ -662,6 +676,32 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+         }
+     }
+ 
++    // Servett Start
++    @Override
++    public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
++        Chunk.PlayerBlockModification playerBlockModification =
++            tickingPlayer.modifiedBlocks.get(position.asLong());
++        if (playerBlockModification != null) {
++            return playerBlockModification.getModifiedBlock();
++        }
++        // CraftBukkit start - tree generation
++        if (captureTreeGeneration) {
++            CraftBlockState previous = capturedBlockStates.get(position); // Paper
++            if (previous != null) {
++                return previous.getHandle();
++            }
++        }
++        // CraftBukkit end
++        if (isOutsideWorld(position)) {
++            return Blocks.VOID_AIR.getBlockData();
++        } else {
++            Chunk chunk = this.getChunkAt(position.getX() >> 4, position.getZ() >> 4);
++
++            return chunk.getType(position);
++        }
++    }
++    // Servett End
++
+     @Override
+     public Fluid getFluid(BlockPosition blockposition) {
+         if (isOutsideWorld(blockposition)) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftChunk.java b/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
+index 9cff8b88baea65a26aec82d51014a54a70ea31aa..ddd08b62723e72e5b48550911b9e305d2f5f28fc 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
+@@ -1,10 +1,6 @@
+ package org.bukkit.craftbukkit;
+ 
+ import com.google.common.base.Preconditions;
+-import java.lang.ref.WeakReference;
+-import java.util.Arrays;
+-import java.util.Collection;
+-import net.minecraft.server.BiomeBase;
+ import net.minecraft.server.BiomeStorage;
+ import net.minecraft.server.BlockPosition;
+ import net.minecraft.server.Blocks;
+@@ -34,12 +30,16 @@ import org.bukkit.craftbukkit.util.CraftMagicNumbers;
+ import org.bukkit.entity.Entity;
+ import org.bukkit.plugin.Plugin;
+ 
++import java.lang.ref.WeakReference;
++import java.util.Arrays;
++import java.util.Collection;
++
+ public class CraftChunk implements Chunk {
+     private WeakReference<net.minecraft.server.Chunk> weakChunk;
+     private final WorldServer worldServer;
+     private final int x;
+     private final int z;
+-    private static final DataPaletteBlock<IBlockData> emptyBlockIDs = new ChunkSection(0).getBlocks();
++    private static final DataPaletteBlock<IBlockData> emptyBlockIDs = new ChunkSection(null, 0).getBlocks();
+     private static final byte[] emptyLight = new byte[2048];
+ 
+     public CraftChunk(net.minecraft.server.Chunk chunk) {
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-index 42997d73d2d691fbf8290f567e90de2a7b9abb80..187d75ce6426deb4cb6bdd8b7b1c0e8e7b9a9aab 100644
+index 78e84c3d6d5f0e1dc0490f9f6c106b84e4853f8d..187d75ce6426deb4cb6bdd8b7b1c0e8e7b9a9aab 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-@@ -55,8 +55,8 @@ import java.util.List;
- import java.util.stream.Collectors;
+@@ -1,16 +1,13 @@
+ package org.bukkit.craftbukkit.block;
  
+ import com.google.common.base.Preconditions;
+-import java.util.Collection;
+-import java.util.Collections;
+-import java.util.List;
+-import java.util.stream.Collectors;
+ import net.minecraft.server.AxisAlignedBB;
+ import net.minecraft.server.BiomeBase;
+ import net.minecraft.server.BlockPosition;
+ import net.minecraft.server.BlockRedstoneWire;
+ import net.minecraft.server.BlockTileEntity;
+ import net.minecraft.server.Blocks;
++import net.minecraft.server.EntityPlayer;
+ import net.minecraft.server.EnumDirection;
+ import net.minecraft.server.EnumSkyBlock;
+ import net.minecraft.server.GeneratorAccess;
+@@ -35,12 +32,15 @@ import org.bukkit.block.BlockFace;
+ import org.bukkit.block.BlockState;
+ import org.bukkit.block.PistonMoveReaction;
+ import org.bukkit.block.data.BlockData;
++import org.bukkit.craftbukkit.CraftChunk;
+ import org.bukkit.craftbukkit.CraftFluidCollisionMode;
+ import org.bukkit.craftbukkit.CraftWorld;
+ import org.bukkit.craftbukkit.block.data.CraftBlockData;
++import org.bukkit.craftbukkit.entity.CraftPlayer;
+ import org.bukkit.craftbukkit.inventory.CraftItemStack;
+ import org.bukkit.craftbukkit.util.CraftMagicNumbers;
+ import org.bukkit.craftbukkit.util.CraftRayTraceResult;
++import org.bukkit.entity.Player;
+ import org.bukkit.inventory.ItemStack;
+ import org.bukkit.metadata.MetadataValue;
+ import org.bukkit.plugin.Plugin;
+@@ -49,9 +49,14 @@ import org.bukkit.util.BoundingBox;
+ import org.bukkit.util.RayTraceResult;
+ import org.bukkit.util.Vector;
+ 
++import java.util.Collection;
++import java.util.Collections;
++import java.util.List;
++import java.util.stream.Collectors;
++
  public class CraftBlock implements Block {
 -    private final net.minecraft.server.GeneratorAccess world;
 -    private final BlockPosition position;
@@ -3303,6 +5409,54 @@ index 42997d73d2d691fbf8290f567e90de2a7b9abb80..187d75ce6426deb4cb6bdd8b7b1c0e8e
  
      public CraftBlock(GeneratorAccess world, BlockPosition position) {
          this.world = world;
+@@ -712,4 +717,47 @@ public class CraftBlock implements Block {
+         return new com.destroystokyo.paper.block.CraftBlockSoundGroup(getNMSBlock().getBlockData().getStepSound());
+     }
+     // Paper end
++
++    // Servett Start
++    @Override
++    public void setPlayerModifiedBlock(Player player, BlockData type) {
++        // Track internally
++        ((CraftChunk) getChunk()).getHandle().addPlayerModifiedBlock(
++            this.getX(),
++            this.getY(), this.getZ(),
++            ((CraftPlayer) player).getHandle(),
++            ((CraftBlockData) type).getState());
++        // Send block change
++        player.sendBlockChange(this.getLocation(), type);
++    }
++
++    @Override
++    public void removePlayerModifiedBlock(Player player) {
++        // Remove internally
++        ((CraftChunk) getChunk()).getHandle().removePlayerModifiedBlock(
++            this.getX(),
++            this.getY(),
++            this.getZ(),
++            ((CraftPlayer) player).getHandle());
++        // Send block change
++        player.sendBlockChange(this.getLocation(), getBlockData());
++    }
++
++    @Override
++    public BlockData getPlayerKnownBlock(Player player) {
++        final WorldServer worldServer = getCraftWorld().getHandle();
++        BlockData material;
++        synchronized (worldServer.tickingPlayerLock) {
++            final EntityPlayer oldPlayer = worldServer.tickingPlayer;
++            try {
++                worldServer.tickingPlayer = ((CraftPlayer) player).getHandle();
++                material = getBlockData();
++            } finally {
++                worldServer.tickingPlayer = oldPlayer;
++            }
++        }
++        return material;
++    }
++    // Servett End
++
+ }
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/EventBlock.java b/src/main/java/org/bukkit/craftbukkit/block/EventBlock.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..9090a5d7df77ea628d4c2fddc36ca37b18da22b4
@@ -3343,7 +5497,7 @@ index 0000000000000000000000000000000000000000..9090a5d7df77ea628d4c2fddc36ca37b
 +
 +}
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index c2546fb1a327da5ce34c1cef614a073469089858..102d5fcb1d784322db41cd49b548e452f85cbc99 100644
+index 516a0164809656af85f2880da7de9a403ed1c958..65491916241bc510c13a07b3712f8500c3c2cb29 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 @@ -1,6 +1,5 @@
@@ -3523,3 +5677,82 @@ index 1f5d15bb49852053ed47a8c608ebde42f71373c1..8146ca7b131896b05eda7ff3d04b78e1
          } else {
              switch (action) {
                  case LEFT_CLICK_BLOCK:
+diff --git a/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java b/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
+index 969d548de2c6ba4f9df959f73d7324874101a6f6..7babb67e41a0a385c675327fb6e8b7f395bb890b 100644
+--- a/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
++++ b/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
+@@ -1,7 +1,5 @@
+ package org.bukkit.craftbukkit.generator;
+ 
+-import java.util.HashSet;
+-import java.util.Set;
+ import net.minecraft.server.BlockPosition;
+ import net.minecraft.server.Blocks;
+ import net.minecraft.server.ChunkSection;
+@@ -14,6 +12,9 @@ import org.bukkit.craftbukkit.util.CraftMagicNumbers;
+ import org.bukkit.generator.ChunkGenerator;
+ import org.bukkit.material.MaterialData;
+ 
++import java.util.HashSet;
++import java.util.Set;
++
+ /**
+  * Data to be used for the block types and data in a newly generated chunk.
+  */
+@@ -159,7 +160,8 @@ public final class CraftChunkData implements ChunkGenerator.ChunkData {
+     private ChunkSection getChunkSection(int y, boolean create) {
+         ChunkSection section = sections[y >> 4];
+         if (create && section == null) {
+-            sections[y >> 4] = section = new ChunkSection(y >> 4 << 4, null, world instanceof org.bukkit.craftbukkit.CraftWorld ? ((org.bukkit.craftbukkit.CraftWorld) world).getHandle() : null, true); // Paper - Anti-Xray
++            sections[y >> 4] = section = new ChunkSection(world instanceof org.bukkit.craftbukkit.CraftWorld ? ((org.bukkit.craftbukkit.CraftWorld) world).getHandle() : null,
++                y >> 4 << 4, null, world instanceof org.bukkit.craftbukkit.CraftWorld ? ((org.bukkit.craftbukkit.CraftWorld) world).getHandle() : null, true); // Paper - Anti-Xray
+         }
+         return section;
+     }
+diff --git a/src/main/java/org/bukkit/craftbukkit/util/DummyGeneratorAccess.java b/src/main/java/org/bukkit/craftbukkit/util/DummyGeneratorAccess.java
+index d0b813008ca21fe6aa9b514ed4325596113fd459..b1fc5116af64e72d9ebd725df7c01fda1bcea5f7 100644
+--- a/src/main/java/org/bukkit/craftbukkit/util/DummyGeneratorAccess.java
++++ b/src/main/java/org/bukkit/craftbukkit/util/DummyGeneratorAccess.java
+@@ -1,8 +1,5 @@
+ package org.bukkit.craftbukkit.util;
+ 
+-import java.util.List;
+-import java.util.Random;
+-import java.util.function.Predicate;
+ import net.minecraft.server.AxisAlignedBB;
+ import net.minecraft.server.BiomeBase;
+ import net.minecraft.server.BiomeManager;
+@@ -12,6 +9,7 @@ import net.minecraft.server.ChunkStatus;
+ import net.minecraft.server.DifficultyDamageScaler;
+ import net.minecraft.server.Entity;
+ import net.minecraft.server.EntityHuman;
++import net.minecraft.server.EntityPlayer;
+ import net.minecraft.server.Fluid;
+ import net.minecraft.server.FluidType;
+ import net.minecraft.server.GeneratorAccess;
+@@ -30,6 +28,10 @@ import net.minecraft.server.WorldBorder;
+ import net.minecraft.server.WorldData;
+ import net.minecraft.server.WorldProvider;
+ 
++import java.util.List;
++import java.util.Random;
++import java.util.function.Predicate;
++
+ public class DummyGeneratorAccess implements GeneratorAccess {
+ 
+     public static final GeneratorAccess INSTANCE = new DummyGeneratorAccess();
+@@ -214,4 +216,11 @@ public class DummyGeneratorAccess implements GeneratorAccess {
+         throw new UnsupportedOperationException("Not supported yet.");
+     }
+     // Paper end
++
++    // Servett Start
++    @Override public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
++        return getType(position);
++    }
++    // Servett End
++
+ }
+-- 
+2.20.1
+

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
-Date: Wed, 4 Mar 2020 12:10:19 +0100
-Subject: [PATCH] Remove unused commands
+Date: Fri, 20 Mar 2020 22:26:05 +0100
+Subject: [PATCH] Remove Unused Commands
 
 
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
@@ -56,3 +56,6 @@ index 460fda05a62b12db2edcfb7ea8b2a5dd8e4b110d..26bd2b9ddff3091a1a067396ed5b6903
          register("bukkit", new co.aikar.timings.TimingsCommand("timings")); // Paper
      }
  
+-- 
+2.20.1
+
