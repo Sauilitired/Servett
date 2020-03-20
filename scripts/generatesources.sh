@@ -10,31 +10,31 @@ done
 
 
 cd $basedir
-paperVer=$(cat current-paper)
+tuinityVer=$(cat current-tuinity)
 
-minecraftversion=$(cat $basedir/Paper/work/BuildData/info.json | grep minecraftVersion | cut -d '"' -f 4)
-decompile="Paper/work/Minecraft/$minecraftversion/spigot"
+minecraftversion=$(cat $basedir/Tuinity/Paper/work/BuildData/info.json | grep minecraftVersion | cut -d '"' -f 4)
+decompile="Tuinity/Paper/work/Minecraft/$minecraftversion/spigot"
 
 mkdir -p mc-dev/src/net/minecraft/server
 
 cd mc-dev
 if [ ! -d ".git" ]; then
-	git init
+    git init
 fi
 
 rm src/net/minecraft/server/*.java
 cp $basedir/$decompile/net/minecraft/server/*.java src/net/minecraft/server
 
-base="$basedir/Paper/Paper-Server/src/main/java/net/minecraft/server"
+base="$basedir/Tuinity/Tuinity-Server/src/main/java/net/minecraft/server"
 cd $basedir/mc-dev/src/net/minecraft/server/
 for file in $(/bin/ls $base)
 do
-	if [ -f "$file" ]; then
-		rm -f "$file"
-	fi
+    if [ -f "$file" ]; then
+        rm -f "$file"
+    fi
 done
 cd $basedir/mc-dev
 git add . -A
 git commit . -m "mc-dev"
-git tag -a "$paperVer" -m "$paperVer" 2>/dev/null
-pushRepo . $MCDEV_REPO $paperVer
+git tag -a "$tuinityVer" -m "$tuinityVer" 2>/dev/null
+pushRepo . $MCDEV_REPO $tuinityVer

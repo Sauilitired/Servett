@@ -1,4 +1,4 @@
-# EmpireCraft #
+# Servett #
 ## What ##
 EmpireCraft is a fork of Spigot used by the [Empire Minecraft](http://ref.emc.gs/Aikar?gam=EmpireCraft) Server.
 
