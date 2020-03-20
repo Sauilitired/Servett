@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Wed, 4 Mar 2020 12:09:22 +0100
+Subject: [PATCH] Player modified block API
+
+
+diff --git a/src/main/java/org/bukkit/block/Block.java b/src/main/java/org/bukkit/block/Block.java
+index a14a7583409b41d3e0ed5a40ba258e37d7af3797..68d364cebdd6293c063535a93f2244977814cc32 100644
+--- a/src/main/java/org/bukkit/block/Block.java
++++ b/src/main/java/org/bukkit/block/Block.java
+@@ -1,7 +1,5 @@
+ package org.bukkit.block;
+ 
+-import java.util.Collection;
+-
+ import org.bukkit.Chunk;
+ import org.bukkit.FluidCollisionMode;
+ import org.bukkit.Location;
+@@ -9,6 +7,7 @@ import org.bukkit.Material;
+ import org.bukkit.World;
+ import org.bukkit.block.data.Bisected;
+ import org.bukkit.block.data.BlockData;
++import org.bukkit.entity.Player;
+ import org.bukkit.inventory.ItemStack;
+ import org.bukkit.metadata.Metadatable;
+ import org.bukkit.util.BoundingBox;
+@@ -18,6 +17,8 @@ import org.jetbrains.annotations.Contract;
+ import org.jetbrains.annotations.NotNull;
+ import org.jetbrains.annotations.Nullable;
+ 
++import java.util.Collection;
++
+ /**
+  * Represents a block. This is a live object, and only one Block may exist for
+  * any given location in a world. The state of the block may change
+@@ -552,4 +553,26 @@ public interface Block extends Metadatable {
+     @NotNull
+     com.destroystokyo.paper.block.BlockSoundGroup getSoundGroup();
+     // Paper end
++
++    // Servett Start
++    /**
++     * Set the modified block type for a player
++     * @param player Player to set the block for
++     * @param type Block type
++     */
++    void setPlayerModifiedBlock(Player player, BlockData type);
++
++    /**
++     * Reset the modified block type for a player
++     * @param player Player to reset the block for
++     */
++    void removePlayerModifiedBlock(Player player);
++
++    /**
++     * Get the block data known by a specific player
++     * @param player Player to get the data for
++     */
++    BlockData getPlayerKnownBlock(Player player);
++    // Servett End
++
+ }

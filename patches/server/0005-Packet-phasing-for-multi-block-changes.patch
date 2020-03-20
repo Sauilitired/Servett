@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Wed, 4 Mar 2020 14:30:14 +0100
+Subject: [PATCH] Packet phasing for multi block changes
+
+
+diff --git a/src/main/java/net/minecraft/server/PacketPlayOutMultiBlockChange.java b/src/main/java/net/minecraft/server/PacketPlayOutMultiBlockChange.java
+index fe7566659a02b3fd3daee0b1bf3875e513030df0..ddcf78762d66b62ff5f0eb046f0b951dfea3afe7 100644
+--- a/src/main/java/net/minecraft/server/PacketPlayOutMultiBlockChange.java
++++ b/src/main/java/net/minecraft/server/PacketPlayOutMultiBlockChange.java
+@@ -9,12 +9,12 @@ public class PacketPlayOutMultiBlockChange implements Packet<PacketListenerPlayO
+ 
+     public PacketPlayOutMultiBlockChange() {}
+ 
+-    public PacketPlayOutMultiBlockChange(int i, short[] ashort, Chunk chunk) {
++    public PacketPlayOutMultiBlockChange(final EntityPlayer entityPlayer, int i, short[] ashort, Chunk chunk) {
+         this.a = chunk.getPos();
+         this.b = new PacketPlayOutMultiBlockChange.MultiBlockChangeInfo[i];
+ 
+         for (int j = 0; j < this.b.length; ++j) {
+-            this.b[j] = new PacketPlayOutMultiBlockChange.MultiBlockChangeInfo(ashort[j], chunk);
++            this.b[j] = new PacketPlayOutMultiBlockChange.MultiBlockChangeInfo(entityPlayer, ashort[j], chunk);
+         }
+ 
+     }
+@@ -61,9 +61,9 @@ public class PacketPlayOutMultiBlockChange implements Packet<PacketListenerPlayO
+             this.c = iblockdata;
+         }
+ 
+-        public MultiBlockChangeInfo(short short0, Chunk chunk) {
++        public MultiBlockChangeInfo(EntityPlayer entityPlayer, short short0, Chunk chunk) {
+             this.b = short0;
+-            this.c = chunk.getType(this.a());
++            this.c = chunk.getType(this.a(), entityPlayer);
+         }
+ 
+         public BlockPosition a() {
+diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
+index 762428c16b4e4c42ef0f09654d6d610dd85121ae..5212d16bf2fe1839be258d89c8c3781df91fd3a3 100644
+--- a/src/main/java/net/minecraft/server/PlayerChunk.java
++++ b/src/main/java/net/minecraft/server/PlayerChunk.java
+@@ -288,7 +288,7 @@ public class PlayerChunk {
+             } else if (this.dirtyCount == 64) {
+                 this.a(player -> new PacketPlayOutMapChunk(chunk, this.r, true), false); // Paper - Anti-Xray
+             } else if (this.dirtyCount != 0) {
+-                this.a(player -> new PacketPlayOutMultiBlockChange(this.dirtyCount, this.dirtyBlocks, chunk), false);
++                this.a(player -> new PacketPlayOutMultiBlockChange(player, this.dirtyCount, this.dirtyBlocks, chunk), false);
+ 
+                 for (i = 0; i < this.dirtyCount; ++i) {
+                     j = (this.dirtyBlocks[i] >> 12 & 15) + this.location.x * 16;
