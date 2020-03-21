@@ -47,7 +47,7 @@ case "$1" in
     mvn clean install && cd ../${FORK_NAME}-Server && mvn clean install
   )
   ;;
-"jar" | "paperclip")
+"jar" | "paperclip" | "servettclip")
   (
     basedir
     cd "$basedir"
@@ -60,7 +60,7 @@ case "$1" in
     cd ${FORK_NAME}-API
     mvn -e clean install && cd ../${FORK_NAME}-Server && mvn -e clean install
     cd "$basedir"
-    ./scripts/paperclip.sh
+    ./scripts/servettclip.sh
   )
   ;;
 "d" | "de" | "deploy")

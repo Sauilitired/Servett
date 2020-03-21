@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Sat, 21 Mar 2020 10:09:43 +0100
+Subject: [PATCH] Update API pom
+
+
+diff --git a/pom.xml b/pom.xml
+index bab0b017ab9cbc47933ec100593a2c25117d6c48..847f6c2807ee252928ceef9cea6e2874e2d6ae7a 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -3,18 +3,18 @@
+          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+     <modelVersion>4.0.0</modelVersion>
+     <parent>
+-        <groupId>com.tuinity</groupId>
+-        <artifactId>tuinity-parent</artifactId>
++        <groupId>com.hegemonyrg</groupId>
++        <artifactId>servett-parent</artifactId>
+         <version>dev-SNAPSHOT</version>
+         <relativePath>../pom.xml</relativePath>
+     </parent>
+ 
+-    <artifactId>tuinity-api</artifactId>
++    <artifactId>servett-api</artifactId>
+     <version>1.15.2-R0.1-SNAPSHOT</version>
+     <packaging>jar</packaging>
+ 
+-    <name>Tuinity-API</name>
+-    <url>https://github.com/Spottedleaf/Tuinity</url>
++    <name>Servett-API</name>
++    <url>https://github.com/Sauilitired/byof</url>
+     <description>An enhanced plugin API for Minecraft servers.</description>
+ 
+     <properties>
+-- 
+2.20.1
+

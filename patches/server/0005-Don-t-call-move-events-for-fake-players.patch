@@ -1,0 +1,120 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Sat, 21 Mar 2020 09:52:21 +0100
+Subject: [PATCH] Don't call move events for fake players
+
+
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index 695bed49926cf6e96a696e8ed2f489d311dc553a..96b2973fa581e09ee2e98ce24cdf4f9aba7ac351 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -94,6 +94,10 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+     public final com.destroystokyo.paper.util.PooledHashSets.PooledObjectLinkedOpenHashSet<EntityPlayer> cachedSingleMobDistanceMap;
+     // Paper end
+ 
++    // Servett Start
++    public boolean fakePlayer = false;
++    // Servett End
++
+     // CraftBukkit start
+     public String displayName;
+     public IChatBaseComponent listName;
+@@ -986,9 +990,13 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+             worldserver.getMethodProfiler().exit();
+             // CraftBukkit start - PlayerTeleportEvent
+             PlayerTeleportEvent tpEvent = new PlayerTeleportEvent(this.getBukkitEntity(), enter, exit, cause);
+-            Bukkit.getServer().getPluginManager().callEvent(tpEvent);
+-            if (tpEvent.isCancelled() || tpEvent.getTo() == null) {
+-                return null;
++
++            // Servett: Don't call teleportation event for fake players
++            if (!this.fakePlayer) {
++                Bukkit.getServer().getPluginManager().callEvent(tpEvent);
++                if (tpEvent.isCancelled() || tpEvent.getTo() == null) {
++                    return null;
++                }
+             }
+ 
+             exit = tpEvent.getTo();
+diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
+index 293ebc003917225abc8f86de5a2a1508c1822fb3..65fdb1bd4b65a178f4ea4e94cd1113940b439f12 100644
+--- a/src/main/java/net/minecraft/server/PlayerConnection.java
++++ b/src/main/java/net/minecraft/server/PlayerConnection.java
+@@ -526,7 +526,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+                     this.lastPitch = to.getPitch();
+ 
+                     // Skip the first time we do this
+-                    if (true) { // Spigot - don't skip any move events
++                    if (!this.player.fakePlayer) { // Spigot - don't skip any move events
+                         Location oldTo = to.clone();
+                         PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
+                         this.server.getPluginManager().callEvent(event);
+@@ -1309,7 +1309,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+                                 this.lastPitch = to.getPitch();
+ 
+                                 // Skip the first time we do this
+-                                if (from.getX() != Double.MAX_VALUE) {
++                                if (!this.player.fakePlayer && from.getX() != Double.MAX_VALUE) {
+                                     Location oldTo = to.clone();
+                                     PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
+                                     this.server.getPluginManager().callEvent(event);
+@@ -1406,16 +1406,20 @@ public class PlayerConnection implements PacketListenerPlayIn {
+ 
+         PlayerTeleportEvent event =
+             new PlayerTeleportEvent(player, from.clone(), to.clone(), cause);
+-        this.server.getPluginManager().callEvent(event);
+ 
+-        if (event.isCancelled() || !to.equals(event.getTo())) {
+-            set.clear(); // Can't relative teleport
+-            to = event.isCancelled() ? event.getFrom() : event.getTo();
+-            d0 = to.getX();
+-            d1 = to.getY();
+-            d2 = to.getZ();
+-            f = to.getYaw();
+-            f1 = to.getPitch();
++        // Servett: Don't call teleportation event for fake players
++        if (!this.player.fakePlayer) {
++            this.server.getPluginManager().callEvent(event);
++
++            if (event.isCancelled() || !to.equals(event.getTo())) {
++                set.clear(); // Can't relative teleport
++                to = event.isCancelled() ? event.getFrom() : event.getTo();
++                d0 = to.getX();
++                d1 = to.getY();
++                d2 = to.getZ();
++                f = to.getYaw();
++                f1 = to.getPitch();
++            }
+         }
+ 
+         this.internalTeleport(d0, d1, d2, f, f1, set);
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index 65491916241bc510c13a07b3712f8500c3c2cb29..35b34d5c53dd715433a6d0d5209b695eeffe96ff 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -761,13 +761,18 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+         Location from = this.getLocation();
+         // To = Players new Location if Teleport is Successful
+         Location to = location;
++
+         // Create & Call the Teleport Event.
+         PlayerTeleportEvent event = new PlayerTeleportEvent(this, from, to, cause);
+-        server.getPluginManager().callEvent(event);
+ 
+-        // Return False to inform the Plugin that the Teleport was unsuccessful/cancelled.
+-        if (event.isCancelled()) {
+-            return false;
++        // Servett: Only call teleport event in the case that we're dealing with a real player
++        if (!this.getHandle().fakePlayer) {
++            server.getPluginManager().callEvent(event);
++
++            // Return False to inform the Plugin that the Teleport was unsuccessful/cancelled.
++            if (event.isCancelled()) {
++                return false;
++            }
+         }
+ 
+         // If this player is riding another entity, we must dismount before teleporting.
+-- 
+2.20.1
+

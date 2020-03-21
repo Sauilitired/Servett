@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Sat, 21 Mar 2020 09:55:00 +0100
+Subject: [PATCH] Add fake player API
+
+
+diff --git a/src/main/java/org/bukkit/entity/Player.java b/src/main/java/org/bukkit/entity/Player.java
+index 5367975ac1c60449581b0cdaf9790786c7709652..5cd414d1ac098d382980ead42e66519722fa955f 100644
+--- a/src/main/java/org/bukkit/entity/Player.java
++++ b/src/main/java/org/bukkit/entity/Player.java
+@@ -1992,6 +1992,23 @@ public interface Player extends HumanEntity, Conversable, OfflinePlayer, PluginM
+     void setNoTickViewDistance(int viewDistance);
+     // Tuinity end
+ 
++    // Servett Start
++    class Servett {
++
++        public boolean isFakePlayer() {
++            throw new UnsupportedOperationException("Not supported yet.");
++        }
++
++        public void setFakePlayer(final boolean fakeStatus) {
++            throw new UnsupportedOperationException("Not supported yet.");
++        }
++
++    }
++    // Servett End
++
++    @NotNull
++    Servett servett();
++
+     // Spigot start
+     public class Spigot extends Entity.Spigot {
+ 
+-- 
+2.20.1
+

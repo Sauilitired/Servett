@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Sat, 21 Mar 2020 10:41:01 +0100
+Subject: [PATCH] Update jar name
+
+
+diff --git a/pom.xml b/pom.xml
+index 30f8734caf9b83eab221968f0a37dce034d637f9..528277bb04926a96123faeca7009b9f463d5a660 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -148,7 +148,7 @@
+ 
+     <!-- This builds a completely 'ready to start' jar with all dependencies inside -->
+     <build>
+-        <finalName>tuinity-${minecraft.version}</finalName>
++        <finalName>servett-${minecraft.version}</finalName>
+         <defaultGoal>install</defaultGoal> <!-- Paper -->
+         <plugins>
+             <plugin>
+-- 
+2.20.1
+

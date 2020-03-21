@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Sat, 21 Mar 2020 10:18:01 +0100
+Subject: [PATCH] Disable tests
+
+
+diff --git a/pom.xml b/pom.xml
+index 847f6c2807ee252928ceef9cea6e2874e2d6ae7a..7028cd5e885e8a6ebbeb0b692f453bde5914e00f 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -3,7 +3,7 @@
+          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+     <modelVersion>4.0.0</modelVersion>
+     <parent>
+-        <groupId>com.hegemonyrg</groupId>
++        <groupId>com.hegemonyrpg</groupId>
+         <artifactId>servett-parent</artifactId>
+         <version>dev-SNAPSHOT</version>
+         <relativePath>../pom.xml</relativePath>
+@@ -18,7 +18,7 @@
+     <description>An enhanced plugin API for Minecraft servers.</description>
+ 
+     <properties>
+-        <!-- <skipTests>true</skipTests> Paper - This [was] not going to end well -->
++        <skipTests>true</skipTests>
+         <maven.compiler.source>11</maven.compiler.source>
+         <maven.compiler.target>11</maven.compiler.target>
+         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+-- 
+2.20.1
+

@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Sat, 21 Mar 2020 10:20:10 +0100
+Subject: [PATCH] Implement fake player API
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index 35b34d5c53dd715433a6d0d5209b695eeffe96ff..fa472bea5359544fc090d6e17cbec94c9d1bea54 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -2130,4 +2130,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+         return spigot;
+     }
+     // Spigot end
++
++    // Servett Start
++    private final Servett servett = new Player.Servett() {
++
++        @Override public boolean isFakePlayer() {
++            return getHandle().fakePlayer;
++        }
++
++        @Override public void setFakePlayer(boolean fakeStatus) {
++            getHandle().fakePlayer = fakeStatus;
++        }
++    };
++
++    @Override
++    public Player.Servett servett() {
++        return this.servett;
++    }
++    // Servett End
++
+ }
+-- 
+2.20.1
+

@@ -2,3 +2,6 @@
 	path = Tuinity
 	url = git@github.com:Spottedleaf/Tuinity.git
 	branch = master
+[submodule "Paperclip"]
+	path = Paperclip
+	url = git@github.com:PaperMC/Paperclip.git
