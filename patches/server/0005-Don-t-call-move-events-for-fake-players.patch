@@ -89,7 +89,7 @@ index 293ebc003917225abc8f86de5a2a1508c1822fb3..65fdb1bd4b65a178f4ea4e94cd111394
  
          this.internalTeleport(d0, d1, d2, f, f1, set);
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index 65491916241bc510c13a07b3712f8500c3c2cb29..35b34d5c53dd715433a6d0d5209b695eeffe96ff 100644
+index 16ef018a03d951eb522230685fc0f1d3e7bf6a52..de34f35765931196b3513acc2f0fbda0495e5457 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 @@ -761,13 +761,18 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
