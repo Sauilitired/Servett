@@ -1,0 +1,104 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Thu, 26 Mar 2020 17:10:10 +0100
+Subject: [PATCH] Make ICollisionAccess respect phased blocks
+
+
+diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
+index f2ec4192948bb5f589802763b395f54c2f0403a1..1237758599ea6659bfb6ca73cfe5ec5fa8c1159a 100644
+--- a/src/main/java/net/minecraft/server/Entity.java
++++ b/src/main/java/net/minecraft/server/Entity.java
+@@ -887,8 +887,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     }
+ 
+     protected float ah() {
+-        float f = this.world.getType(new BlockPosition(this)).getBlock().n();
+-        float f1 = this.world.getType(this.aj()).getBlock().n();
++        float f = this.getType(new BlockPosition(this)).getBlock().n();
++        float f1 = this.getType(this.aj()).getBlock().n();
+ 
+         return (double) f == 1.0D ? f1 : f;
+     }
+@@ -906,9 +906,19 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+ 
+         float f = block.m();
+ 
+-        return block != Blocks.WATER && block != Blocks.BUBBLE_COLUMN ? ((double) f == 1.0D ? this.world.getType(this.aj()).getBlock().m() : f) : f;
++        return block != Blocks.WATER && block != Blocks.BUBBLE_COLUMN ? ((double) f == 1.0D ? this.getType(this.aj()).getBlock().m() : f) : f;
+     }
+ 
++    // Servett Start
++    private IBlockData getType(final BlockPosition position) {
++        if (this instanceof EntityPlayer) {
++            return this.world.getType(position, (EntityPlayer) this);
++        } else {
++            return this.world.getType(position);
++        }
++    }
++    // Servett End
++
+     protected BlockPosition aj() {
+         return new BlockPosition(this.locX, this.getBoundingBox().minY - 0.5000001D, this.locZ);
+     }
+@@ -1216,7 +1226,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+ 
+     protected void a(BlockPosition blockposition, IBlockData iblockdata) {
+         if (!iblockdata.getMaterial().isLiquid()) {
+-            IBlockData iblockdata1 = this.world.getType(blockposition.up());
++            IBlockData iblockdata1 = this.getType(blockposition.up());
+             SoundEffectType soundeffecttype = iblockdata1.getBlock() == Blocks.SNOW ? iblockdata1.r() : iblockdata.r();
+ 
+             this.a(soundeffecttype.d(), soundeffecttype.a() * 0.15F, soundeffecttype.b());
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index 96b2973fa581e09ee2e98ce24cdf4f9aba7ac351..7b53119251380a1ec46333086c682b682f31073c 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -1176,7 +1176,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+         BlockPosition blockposition = this.ag();
+ 
+         if (this.world.isLoaded(blockposition)) {
+-            IBlockData iblockdata = this.world.getType(blockposition);
++            IBlockData iblockdata = this.world.getType(blockposition, this);
+ 
+             super.a(d0, flag, iblockdata, blockposition);
+         }
+diff --git a/src/main/java/net/minecraft/server/ICollisionAccess.java b/src/main/java/net/minecraft/server/ICollisionAccess.java
+index f851ed11df14fd9aa8017f44d82fb6cfc3bde345..46cf20e14c7997d444a376c938c66b5f8056927d 100644
+--- a/src/main/java/net/minecraft/server/ICollisionAccess.java
++++ b/src/main/java/net/minecraft/server/ICollisionAccess.java
+@@ -1,13 +1,14 @@
+ package net.minecraft.server;
+ 
+ import com.google.common.collect.Streams;
++
++import javax.annotation.Nullable;
+ import java.util.Collections;
+ import java.util.Set;
+ import java.util.Spliterators.AbstractSpliterator;
+ import java.util.function.Consumer;
+ import java.util.stream.Stream;
+ import java.util.stream.StreamSupport;
+-import javax.annotation.Nullable;
+ 
+ public interface ICollisionAccess extends IBlockAccess {
+ 
+@@ -95,7 +96,15 @@ public interface ICollisionAccess extends IBlockAccess {
+ 
+                         if (iblockaccess != null) {
+                             blockposition_mutableblockposition.d(k1, l1, i2);
+-                            IBlockData iblockdata = iblockaccess.getType(blockposition_mutableblockposition);
++
++                            // Servett Start
++                            final IBlockData iblockdata;
++                            if (entity instanceof EntityPlayer) {
++                                iblockdata = iblockaccess.getType(blockposition_mutableblockposition, (EntityPlayer) entity);
++                            } else {
++                                iblockdata = iblockaccess.getType(blockposition_mutableblockposition);
++                            }
++                            // Servett End
+ 
+                             if ((j2 != 1 || iblockdata.f()) && (j2 != 2 || iblockdata.getBlock() == Blocks.MOVING_PISTON)) {
+                                 VoxelShape voxelshape2 = iblockdata.b((IBlockAccess) ICollisionAccess.this, blockposition_mutableblockposition, voxelshapecollision);
+-- 
+2.20.1
+

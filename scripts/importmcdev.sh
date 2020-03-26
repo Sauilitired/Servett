@@ -99,6 +99,8 @@ done
 #import BehaviorGate
 import PacketPlayOutBlockChange
 import PacketPlayOutMultiBlockChange
+import ICollisionAccess
+import GeneratorAccess
 
 ########################################################
 ########################################################
