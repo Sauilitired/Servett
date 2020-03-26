@@ -8,12 +8,12 @@ while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symli
 done
 . $(dirname $SOURCE)/init.sh
 
-git submodule update --init --recursive
+git submodule update --init --recursive --remote --merge
 
 if [[ "$1" == up* ]]; then
     (
         cd "$basedir/Tuinity/"
-        git fetch && git reset --hard origin/beta
+        git fetch && git reset --hard origin/master
         cd ../
         git add Tuinity
     )
