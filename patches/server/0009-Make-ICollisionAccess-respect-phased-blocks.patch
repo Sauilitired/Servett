@@ -5,10 +5,10 @@ Subject: [PATCH] Make ICollisionAccess respect phased blocks
 
 
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index f2ec4192948bb5f589802763b395f54c2f0403a1..1237758599ea6659bfb6ca73cfe5ec5fa8c1159a 100644
+index a8fbe3e0b8cd9b74fb74502045ddf7447a312b54..65c38cd20358a889e21be1f0d08446ade1656b71 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
-@@ -887,8 +887,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -925,8 +925,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
  
      protected float ah() {
@@ -19,7 +19,7 @@ index f2ec4192948bb5f589802763b395f54c2f0403a1..1237758599ea6659bfb6ca73cfe5ec5f
  
          return (double) f == 1.0D ? f1 : f;
      }
-@@ -906,9 +906,19 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -944,9 +944,19 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
          float f = block.m();
  
@@ -40,7 +40,7 @@ index f2ec4192948bb5f589802763b395f54c2f0403a1..1237758599ea6659bfb6ca73cfe5ec5f
      protected BlockPosition aj() {
          return new BlockPosition(this.locX, this.getBoundingBox().minY - 0.5000001D, this.locZ);
      }
-@@ -1216,7 +1226,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1254,7 +1264,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
      protected void a(BlockPosition blockposition, IBlockData iblockdata) {
          if (!iblockdata.getMaterial().isLiquid()) {
@@ -50,10 +50,10 @@ index f2ec4192948bb5f589802763b395f54c2f0403a1..1237758599ea6659bfb6ca73cfe5ec5f
  
              this.a(soundeffecttype.d(), soundeffecttype.a() * 0.15F, soundeffecttype.b());
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index 96b2973fa581e09ee2e98ce24cdf4f9aba7ac351..7b53119251380a1ec46333086c682b682f31073c 100644
+index d9e2c6b8696c8f049e101cf660aadcb0a652a392..99c7a62fc179337d6dd6b11b5d8765de2e5698fe 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/EntityPlayer.java
-@@ -1176,7 +1176,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -1181,7 +1181,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
          BlockPosition blockposition = this.ag();
  
          if (this.world.isLoaded(blockposition)) {

@@ -1,0 +1,226 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
+Date: Tue, 31 Mar 2020 17:01:07 +0200
+Subject: [PATCH] Don't lookup block modifications for fake players
+
+
+diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
+index 66ee6248affa03ac0d550b4f878726ea18ea2a14..e192f68ff36539cea9a1d8ae05958349be9b191a 100644
+--- a/src/main/java/net/minecraft/server/Chunk.java
++++ b/src/main/java/net/minecraft/server/Chunk.java
+@@ -403,6 +403,7 @@ public class Chunk implements IChunkAccess {
+         try {
+             synchronized (world.tickingPlayerLock) {
+                 if (world.tickingPlayer != null &&
++                    !world.tickingPlayer.fakePlayer &&
+                     world.tickingPlayer.modifiedBlocks != null) {
+                     final PlayerBlockModification blockModification =
+                         world.tickingPlayer.modifiedBlocks.get(BlockPosition.at(x, y, z));
+@@ -1341,6 +1342,9 @@ public class Chunk implements IChunkAccess {
+     // Servett Start
+     public void addPlayerModifiedBlock(final int x, final int y, final int z,
+         final EntityPlayer entityPlayer, final IBlockData blockData) {
++        if (entityPlayer.fakePlayer) {
++            return;
++        }
+         final long position = BlockPosition.at(x, y, z);
+         entityPlayer.modifiedBlocks
+             .put(position, new PlayerBlockModification(entityPlayer.getId(), blockData));
+@@ -1348,6 +1352,9 @@ public class Chunk implements IChunkAccess {
+ 
+     public void removePlayerModifiedBlock(int x, int y, int z, EntityPlayer entityPlayer) {
+         final long position = BlockPosition.at(x, y, z);
++        if (entityPlayer.fakePlayer) {
++            return;
++        }
+         entityPlayer.modifiedBlocks.remove(position);
+     }
+ 
+@@ -1373,7 +1380,7 @@ public class Chunk implements IChunkAccess {
+     @Override public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
+         final PlayerBlockModification playerBlockModification =
+             tickingPlayer.modifiedBlocks.get(position.asLong());
+-        if (playerBlockModification != null) {
++        if (!tickingPlayer.fakePlayer && playerBlockModification != null) {
+             return playerBlockModification.getModifiedBlock();
+         } else {
+             return getBlockDataInternal(position.x, position.y, position.z);
+diff --git a/src/main/java/net/minecraft/server/ChunkCache.java b/src/main/java/net/minecraft/server/ChunkCache.java
+index 5eb0146aee59f5ec1a43a8203193efcb6377133f..46b45768383b1d21e80cb56b097d8f1bbbbafa7e 100644
+--- a/src/main/java/net/minecraft/server/ChunkCache.java
++++ b/src/main/java/net/minecraft/server/ChunkCache.java
+@@ -97,7 +97,7 @@ public class ChunkCache implements IBlockAccess, ICollisionAccess {
+     public IBlockData getType(BlockPosition blockposition) {
+         // Servett Start
+         synchronized (e.tickingPlayerLock) {
+-            if (e.tickingPlayer != null) {
++            if (e.tickingPlayer != null && !e.tickingPlayer.fakePlayer) {
+                 final Chunk.PlayerBlockModification playerBlockModification =
+                     e.tickingPlayer.modifiedBlocks.get(blockposition.asLong());
+                 if (playerBlockModification != null) {
+@@ -128,10 +128,12 @@ public class ChunkCache implements IBlockAccess, ICollisionAccess {
+     // Servett Start
+     @Override
+     public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
+-        final Chunk.PlayerBlockModification playerBlockModification =
+-            tickingPlayer.modifiedBlocks.get(position.asLong());
+-        if (playerBlockModification != null) {
+-            return playerBlockModification.getModifiedBlock();
++        if (tickingPlayer != null && tickingPlayer.fakePlayer) {
++            final Chunk.PlayerBlockModification playerBlockModification =
++                tickingPlayer.modifiedBlocks.get(position.asLong());
++            if (playerBlockModification != null) {
++                return playerBlockModification.getModifiedBlock();
++            }
+         }
+         if (World.isOutsideWorld(position)) {
+             return Blocks.AIR.getBlockData();
+diff --git a/src/main/java/net/minecraft/server/ChunkSection.java b/src/main/java/net/minecraft/server/ChunkSection.java
+index 1c3480486221606341c4abfd19e29bf22c6800cf..8db5c27be0ec5b3dd04debefaa0007d458f6e338 100644
+--- a/src/main/java/net/minecraft/server/ChunkSection.java
++++ b/src/main/java/net/minecraft/server/ChunkSection.java
+@@ -48,7 +48,7 @@ public class ChunkSection {
+     public IBlockData getType(int i, int j, int k) {
+         if (this.world != null) {
+             synchronized (world.tickingPlayerLock) {
+-                if (world.tickingPlayer != null) {
++                if (world.tickingPlayer != null && !world.tickingPlayer.fakePlayer) {
+                     final Chunk.PlayerBlockModification playerBlockModification =
+                         world.tickingPlayer.modifiedBlocks.get(BlockPosition.at(i, j, k));
+                     if (playerBlockModification != null) {
+@@ -60,7 +60,7 @@ public class ChunkSection {
+             synchronized (EntityPlayer.tickingPlayerLock) {
+                 final Chunk.PlayerBlockModification playerBlockModification = EntityPlayer.tickingPlayer
+                     .modifiedBlocks.get(BlockPosition.at(i, j, k));
+-                if (playerBlockModification != null) {
++                if (playerBlockModification != null && !EntityPlayer.tickingPlayer.fakePlayer) {
+                     return playerBlockModification.getModifiedBlock();
+                 }
+             }
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index 99c7a62fc179337d6dd6b11b5d8765de2e5698fe..562edc3063b9ed9f554c17445cf3eeacec624acc 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -414,8 +414,10 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+     @Override
+     public void tick() {
+         synchronized (world.tickingPlayerLock) { // Servett Start
+-            world.tickingPlayer = this; // Servett
+-            tickingPlayer = this; // Servett
++            if (!this.fakePlayer) {
++                world.tickingPlayer = this; // Servett
++                tickingPlayer = this; // Servett
++            }
+ 
+             // CraftBukkit start
+             if (this.joining) {
+@@ -481,8 +483,10 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+ 
+             this.advancementDataPlayer.b(this);
+ 
+-            world.tickingPlayer = null; // Servett
+-            tickingPlayer = null; // Servett
++            if (world.tickingPlayer == this) {
++                world.tickingPlayer = null; // Servett
++                tickingPlayer = null; // Servett
++            }
+         }
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/ProtoChunk.java b/src/main/java/net/minecraft/server/ProtoChunk.java
+index d75458abe3affc0986969761e15e520e77b03c56..fc6477d09a43e945b22e57302db998cd85caa83a 100644
+--- a/src/main/java/net/minecraft/server/ProtoChunk.java
++++ b/src/main/java/net/minecraft/server/ProtoChunk.java
+@@ -111,7 +111,7 @@ public class ProtoChunk implements IChunkAccess {
+         if (world instanceof World) {
+             final World world = (World) this.world;
+             synchronized (world.tickingPlayerLock) {
+-                if (world.tickingPlayer != null) {
++                if (world.tickingPlayer != null && !world.tickingPlayer.fakePlayer) {
+                     final Chunk.PlayerBlockModification playerBlockModification =
+                         world.tickingPlayer.modifiedBlocks.get(blockposition.asLong());
+                     if (playerBlockModification != null) {
+@@ -138,7 +138,7 @@ public class ProtoChunk implements IChunkAccess {
+     public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
+         final Chunk.PlayerBlockModification playerBlockModification =
+             tickingPlayer.modifiedBlocks.get(position.asLong());
+-        if (playerBlockModification != null) {
++        if (playerBlockModification != null && !tickingPlayer.fakePlayer) {
+             return playerBlockModification.getModifiedBlock();
+         }
+ 
+diff --git a/src/main/java/net/minecraft/server/RegionLimitedWorldAccess.java b/src/main/java/net/minecraft/server/RegionLimitedWorldAccess.java
+index 6a7258e173557658cdf5e520c3254c60746330db..2a4efdbbcd5e4841772ba2101bec72e5f168eb07 100644
+--- a/src/main/java/net/minecraft/server/RegionLimitedWorldAccess.java
++++ b/src/main/java/net/minecraft/server/RegionLimitedWorldAccess.java
+@@ -133,7 +133,7 @@ public class RegionLimitedWorldAccess implements GeneratorAccess {
+     public IBlockData getType(BlockPosition blockposition) {
+         // Servett Start
+         synchronized (f.tickingPlayerLock) {
+-            if (f.tickingPlayer != null) {
++            if (f.tickingPlayer != null && !f.tickingPlayer.fakePlayer) {
+                 Chunk.PlayerBlockModification playerBlockModification =
+                     f.tickingPlayer.modifiedBlocks.get(blockposition.asLong());
+                 if (playerBlockModification != null) {
+@@ -150,7 +150,7 @@ public class RegionLimitedWorldAccess implements GeneratorAccess {
+     IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
+         Chunk.PlayerBlockModification playerBlockModification
+             = tickingPlayer.modifiedBlocks.get(position.asLong());
+-        if (playerBlockModification != null) {
++        if (playerBlockModification != null && !tickingPlayer.fakePlayer) {
+             return playerBlockModification.getModifiedBlock();
+         }
+         return this.getChunkAt(position.getX() >> 4, position.getZ() >> 4).getType(position);
+diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
+index 71e1c23f711a4222a5f6c8416c5f122a87b4ffb0..834d9a0c52b6ffb42d204a63caa333d71c52b05d 100644
+--- a/src/main/java/net/minecraft/server/World.java
++++ b/src/main/java/net/minecraft/server/World.java
+@@ -649,7 +649,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+     public IBlockData getType(BlockPosition blockposition) {
+         // Servett Start
+         synchronized (tickingPlayerLock) {
+-            if (tickingPlayer != null) {
++            if (tickingPlayer != null && !tickingPlayer.fakePlayer) {
+                 Chunk.PlayerBlockModification playerBlockModification =
+                     tickingPlayer.modifiedBlocks.get(blockposition.asLong());
+                 if (playerBlockModification != null) {
+@@ -679,16 +679,18 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+     // Servett Start
+     @Override
+     public IBlockData getType(BlockPosition position, EntityPlayer tickingPlayer) {
+-        Chunk.PlayerBlockModification playerBlockModification =
+-            tickingPlayer.modifiedBlocks.get(position.asLong());
+-        if (playerBlockModification != null) {
+-            return playerBlockModification.getModifiedBlock();
+-        }
+-        // CraftBukkit start - tree generation
+-        if (captureTreeGeneration) {
+-            CraftBlockState previous = capturedBlockStates.get(position); // Paper
+-            if (previous != null) {
+-                return previous.getHandle();
++        if (tickingPlayer != null && !tickingPlayer.fakePlayer) {
++            Chunk.PlayerBlockModification playerBlockModification =
++                tickingPlayer.modifiedBlocks.get(position.asLong());
++            if (playerBlockModification != null) {
++                return playerBlockModification.getModifiedBlock();
++            }
++            // CraftBukkit start - tree generation
++            if (captureTreeGeneration) {
++                CraftBlockState previous = capturedBlockStates.get(position); // Paper
++                if (previous != null) {
++                    return previous.getHandle();
++                }
+             }
+         }
+         // CraftBukkit end
+@@ -696,7 +698,6 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+             return Blocks.VOID_AIR.getBlockData();
+         } else {
+             Chunk chunk = this.getChunkAt(position.getX() >> 4, position.getZ() >> 4);
+-
+             return chunk.getType(position);
+         }
+     }
+-- 
+2.20.1
+

@@ -1,7 +1,7 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Alexander=20S=C3=B6derberg?= <sauilitired@gmail.com>
-Date: Fri, 20 Mar 2020 22:23:56 +0100
-Subject: [PATCH] Block Phasing
+Date: Tue, 31 Mar 2020 16:45:16 +0200
+Subject: [PATCH] Block phasing 2.0
 
 
 diff --git a/src/main/java/net/minecraft/server/BlockAccessAir.java b/src/main/java/net/minecraft/server/BlockAccessAir.java
@@ -60,7 +60,7 @@ index 2d07d350d2b73197b6ea73cf90ff59679da7e0e7..04dd68f43cd6ff6a7be417a185f0b099
          long l = 0L;
  
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09c8e504e9 100644
+index 00bc88b2bfae533bc7f17d084ec7e3b4106d14de..66ee6248affa03ac0d550b4f878726ea18ea2a14 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
 @@ -7,30 +7,37 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -154,7 +154,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              TileEntity removed = super.remove(key);
              if (removed != null) {
                  removed.setCurrentChunk(null);
-@@ -86,13 +94,17 @@ public class Chunk implements IChunkAccess {
+@@ -86,6 +94,8 @@ public class Chunk implements IChunkAccess {
              return removed;
          }
      }
@@ -163,17 +163,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
      // Track the number of minecarts and items
      // Keep this synced with entitySlices.add() and entitySlices.remove()
      private final int[] itemCounts = new int[16];
-     private final int[] inventoryEntityCounts = new int[16];
-     // Paper end
- 
--    public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage, ChunkConverter chunkconverter, TickList<Block> ticklist, TickList<FluidType> ticklist1, long i, @Nullable ChunkSection[] achunksection, @Nullable Consumer<Chunk> consumer) {
-+    public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage,
-+        ChunkConverter chunkconverter, TickList<Block> ticklist, TickList<FluidType> ticklist1,
-+        long i, @Nullable ChunkSection[] achunksection, @Nullable Consumer<Chunk> consumer) {
-         this.sections = new ChunkSection[16];
-         this.e = Maps.newHashMap();
-         this.heightMap = Maps.newEnumMap(HeightMap.Type.class);
-@@ -102,7 +114,9 @@ public class Chunk implements IChunkAccess {
+@@ -151,7 +161,9 @@ public class Chunk implements IChunkAccess {
          this.n = new ShortList[16];
          this.entitySlices = (List[]) (new List[16]); // Spigot
          this.world = world;
@@ -184,7 +174,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          this.i = chunkconverter;
          HeightMap.Type[] aheightmap_type = HeightMap.Type.values();
          int j = aheightmap_type.length;
-@@ -130,17 +144,24 @@ public class Chunk implements IChunkAccess {
+@@ -179,17 +191,24 @@ public class Chunk implements IChunkAccess {
                  for (ChunkSection section : achunksection) {
                      if (section != null) {
                          section.chunk = this;
@@ -213,7 +203,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              }
          }
  
-@@ -149,6 +170,7 @@ public class Chunk implements IChunkAccess {
+@@ -198,6 +217,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public org.bukkit.Chunk bukkitChunk;
@@ -221,7 +211,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
      public org.bukkit.Chunk getBukkitChunk() {
          return bukkitChunk;
      }
-@@ -158,7 +180,8 @@ public class Chunk implements IChunkAccess {
+@@ -207,7 +227,8 @@ public class Chunk implements IChunkAccess {
      // CraftBukkit end
  
      // Paper start
@@ -231,7 +221,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
      public PlayerChunk playerChunk;
      // Paper end
  
-@@ -175,12 +198,14 @@ public class Chunk implements IChunkAccess {
+@@ -224,12 +245,14 @@ public class Chunk implements IChunkAccess {
      boolean loadedTicketLevel;
  
      private long neighbourChunksLoadedBitset;
@@ -248,7 +238,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
      }
  
      public final Chunk getRelativeNeighbourIfLoaded(final int relativeX, final int relativeZ) {
-@@ -188,12 +213,16 @@ public class Chunk implements IChunkAccess {
+@@ -237,12 +260,16 @@ public class Chunk implements IChunkAccess {
      }
  
      public final boolean isNeighbourLoaded(final int relativeX, final int relativeZ) {
@@ -268,7 +258,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          }
          final int index = getNeighbourIndex(relativeX, relativeZ);
          this.loadedNeighbourChunks[index] = chunk;
-@@ -251,7 +280,9 @@ public class Chunk implements IChunkAccess {
+@@ -300,7 +327,9 @@ public class Chunk implements IChunkAccess {
      // Tuinity end
  
      public Chunk(World world, ProtoChunk protochunk) {
@@ -279,7 +269,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          Iterator iterator = protochunk.y().iterator();
  
          while (iterator.hasNext()) {
-@@ -294,33 +325,57 @@ public class Chunk implements IChunkAccess {
+@@ -343,33 +372,57 @@ public class Chunk implements IChunkAccess {
          this.needsDecoration = true; // CraftBukkit
      }
  
@@ -344,7 +334,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          // Method body / logic copied from below
          final int i = y >> 4;
          if (y >= 0 && i < this.sections.length && this.sections[i] != null) {
-@@ -329,6 +384,7 @@ public class Chunk implements IChunkAccess {
+@@ -378,6 +431,7 @@ public class Chunk implements IChunkAccess {
          }
          return Blocks.AIR.getBlockData();
      }
@@ -352,7 +342,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
  
      public IBlockData getBlockData_unused(int i, int j, int k) {
          // Paper end
-@@ -357,7 +413,8 @@ public class Chunk implements IChunkAccess {
+@@ -406,7 +460,8 @@ public class Chunk implements IChunkAccess {
                  return Blocks.AIR.getBlockData();
              } catch (Throwable throwable) {
                  CrashReport crashreport = CrashReport.a(throwable, "Getting block state");
@@ -362,7 +352,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
  
                  crashreportsystemdetails.a("Location", () -> {
                      return CrashReportSystemDetails.a(i, j, k);
-@@ -368,19 +425,16 @@ public class Chunk implements IChunkAccess {
+@@ -417,19 +472,16 @@ public class Chunk implements IChunkAccess {
      }
  
      // Paper start - If loaded util
@@ -385,7 +375,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          return this.a(blockposition.getX(), blockposition.getY(), blockposition.getZ());
      }
  
-@@ -411,14 +465,14 @@ public class Chunk implements IChunkAccess {
+@@ -460,14 +512,14 @@ public class Chunk implements IChunkAccess {
      }
  
      // CraftBukkit start
@@ -404,7 +394,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          // CraftBukkit end
          int i = blockposition.getX() & 15;
          int j = blockposition.getY();
-@@ -430,7 +484,8 @@ public class Chunk implements IChunkAccess {
+@@ -479,7 +531,8 @@ public class Chunk implements IChunkAccess {
                  return null;
              }
  
@@ -414,7 +404,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              this.sections[j >> 4] = chunksection;
          }
  
-@@ -444,7 +499,8 @@ public class Chunk implements IChunkAccess {
+@@ -493,7 +546,8 @@ public class Chunk implements IChunkAccess {
              Block block1 = iblockdata1.getBlock();
  
              ((HeightMap) this.heightMap.get(HeightMap.Type.MOTION_BLOCKING)).a(i, j, k, iblockdata);
@@ -424,7 +414,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              ((HeightMap) this.heightMap.get(HeightMap.Type.OCEAN_FLOOR)).a(i, j, k, iblockdata);
              ((HeightMap) this.heightMap.get(HeightMap.Type.WORLD_SURFACE)).a(i, j, k, iblockdata);
              boolean flag2 = chunksection.c();
-@@ -472,7 +528,8 @@ public class Chunk implements IChunkAccess {
+@@ -521,7 +575,8 @@ public class Chunk implements IChunkAccess {
                  }
  
                  // CraftBukkit - Don't place while processing the BlockPlaceEvent, unless it's a BlockContainer. Prevents blocks such as TNT from activating when cancelled.
@@ -434,7 +424,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
                      iblockdata.onPlace(this.world, blockposition, iblockdata1, flag);
                  }
  
-@@ -492,20 +549,19 @@ public class Chunk implements IChunkAccess {
+@@ -541,20 +596,19 @@ public class Chunk implements IChunkAccess {
          }
      }
  
@@ -459,7 +449,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              entity.dead = true;
              return; // Paper
          }
-@@ -523,23 +579,29 @@ public class Chunk implements IChunkAccess {
+@@ -572,23 +626,29 @@ public class Chunk implements IChunkAccess {
          List<Entity> nextSlice = this.entitySlices[k]; // the next list to be added to
          List<Entity> currentSlice = entity.entitySlice;
          if (nextSlice == currentSlice) {
@@ -493,7 +483,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          entity.inChunk = true;
          entity.setCurrentChunk(this); // Paper
          entity.chunkX = this.loc.x;
-@@ -558,18 +620,21 @@ public class Chunk implements IChunkAccess {
+@@ -607,18 +667,21 @@ public class Chunk implements IChunkAccess {
          this.markDirty(); // Paper
      }
  
@@ -519,7 +509,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          if (i < 0) {
              i = 0;
          }
-@@ -579,7 +644,8 @@ public class Chunk implements IChunkAccess {
+@@ -628,7 +691,8 @@ public class Chunk implements IChunkAccess {
          }
  
          // Paper start
@@ -529,7 +519,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          if (entitySlices[i] == entity.entitySlice) {
              entity.entitySlice = null;
          }
-@@ -597,7 +663,10 @@ public class Chunk implements IChunkAccess {
+@@ -646,7 +710,10 @@ public class Chunk implements IChunkAccess {
          this.entities.remove(entity); // Paper
      }
  
@@ -541,7 +531,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
      @Override public int a(HeightMap.Type heightmap_type, int i, int j) { // Paper
          return ((HeightMap) this.heightMap.get(heightmap_type)).a(i & 15, j & 15) - 1;
      }
-@@ -608,23 +677,23 @@ public class Chunk implements IChunkAccess {
+@@ -657,23 +724,23 @@ public class Chunk implements IChunkAccess {
      }
      // Tuinity end
  
@@ -573,7 +563,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          // CraftBukkit start
          TileEntity tileentity = world.capturedTileEntities.get(blockposition);
          if (tileentity == null) {
-@@ -665,12 +734,12 @@ public class Chunk implements IChunkAccess {
+@@ -714,12 +781,12 @@ public class Chunk implements IChunkAccess {
  
      }
  
@@ -589,7 +579,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
  
              if (tileentity1 != null && tileentity1 != tileentity) {
                  tileentity1.ab_();
-@@ -678,16 +747,18 @@ public class Chunk implements IChunkAccess {
+@@ -727,16 +794,18 @@ public class Chunk implements IChunkAccess {
  
              // CraftBukkit start
              // Paper start - Remove invalid mob spawner tile entities
@@ -613,7 +603,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              e.printStackTrace();
              ServerInternalException.reportInternalException(e);
  
-@@ -701,14 +772,12 @@ public class Chunk implements IChunkAccess {
+@@ -750,14 +819,12 @@ public class Chunk implements IChunkAccess {
          }
      }
  
@@ -632,7 +622,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          TileEntity tileentity = this.getTileEntity(blockposition);
          NBTTagCompound nbttagcompound;
  
-@@ -727,8 +796,7 @@ public class Chunk implements IChunkAccess {
+@@ -776,8 +843,7 @@ public class Chunk implements IChunkAccess {
          }
      }
  
@@ -642,7 +632,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          if (this.loaded || this.world.p_()) {
              TileEntity tileentity = (TileEntity) this.tileEntities.remove(blockposition);
  
-@@ -752,10 +820,11 @@ public class Chunk implements IChunkAccess {
+@@ -801,10 +867,11 @@ public class Chunk implements IChunkAccess {
          // Tuinity start - neighbour cache
          int chunkX = this.loc.x;
          int chunkZ = this.loc.z;
@@ -656,7 +646,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
                  if (neighbour != null) {
                      neighbour.setNeighbourLoaded(-dx, -dz, this);
                      // should be in cached already
-@@ -767,38 +836,43 @@ public class Chunk implements IChunkAccess {
+@@ -816,38 +883,43 @@ public class Chunk implements IChunkAccess {
          this.loadedTicketLevel = true;
          // Tuinity end - neighbour cache
  
@@ -721,7 +711,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
                  } // Paper
              }
          }
-@@ -806,18 +880,20 @@ public class Chunk implements IChunkAccess {
+@@ -855,18 +927,20 @@ public class Chunk implements IChunkAccess {
  
      public void unloadCallback() {
          org.bukkit.Server server = this.world.getServer();
@@ -746,7 +736,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
                  if (neighbour != null) {
                      neighbour.setNeighbourUnloaded(-dx, -dz);
                  }
-@@ -827,7 +903,7 @@ public class Chunk implements IChunkAccess {
+@@ -876,7 +950,7 @@ public class Chunk implements IChunkAccess {
          this.resetNeighbours();
          // Tuinity end - neighbour cache
  
@@ -755,7 +745,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
      }
      // CraftBukkit end
  
-@@ -835,8 +911,10 @@ public class Chunk implements IChunkAccess {
+@@ -884,8 +958,10 @@ public class Chunk implements IChunkAccess {
          this.s = true;
      }
  
@@ -768,7 +758,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
  
-@@ -849,7 +927,8 @@ public class Chunk implements IChunkAccess {
+@@ -898,7 +974,8 @@ public class Chunk implements IChunkAccess {
  
                  while (iterator.hasNext()) {
                      Entity entity1 = (Entity) iterator.next();
@@ -778,7 +768,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
  
                      if (entity1.getBoundingBox().c(axisalignedbb) && entity1 != entity) {
                          if (predicate == null || predicate.test(entity1)) {
-@@ -857,13 +936,16 @@ public class Chunk implements IChunkAccess {
+@@ -906,13 +983,16 @@ public class Chunk implements IChunkAccess {
                          }
  
                          if (entity1 instanceof EntityEnderDragon) {
@@ -797,7 +787,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
                                      list.add(entitycomplexpart);
                                  }
                              }
-@@ -875,8 +957,10 @@ public class Chunk implements IChunkAccess {
+@@ -924,8 +1004,10 @@ public class Chunk implements IChunkAccess {
  
      }
  
@@ -810,7 +800,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
  
-@@ -888,9 +972,11 @@ public class Chunk implements IChunkAccess {
+@@ -937,9 +1019,11 @@ public class Chunk implements IChunkAccess {
  
              while (iterator.hasNext()) {
                  T entity = (T) iterator.next(); // CraftBukkit - decompile error
@@ -824,7 +814,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
                      list.add(entity);
                  }
              }
-@@ -898,8 +984,10 @@ public class Chunk implements IChunkAccess {
+@@ -947,8 +1031,10 @@ public class Chunk implements IChunkAccess {
  
      }
  
@@ -837,7 +827,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
  
-@@ -917,7 +1005,8 @@ public class Chunk implements IChunkAccess {
+@@ -966,7 +1052,8 @@ public class Chunk implements IChunkAccess {
          }
          // Paper end
          for (int k = i; k <= j; ++k) {
@@ -847,7 +837,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              Iterator iterator = this.entitySlices[k].iterator(); // Spigot
  
              // Paper start - Don't search for inventories if we have none, and that is all we want
-@@ -927,13 +1016,16 @@ public class Chunk implements IChunkAccess {
+@@ -976,13 +1063,16 @@ public class Chunk implements IChunkAccess {
               * Make sure the inventory selector stays in sync.
               * It should be the one that checks `var1 instanceof IInventory && var1.isAlive()`
               */
@@ -867,7 +857,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
                      list.add(t0);
                  }
              }
-@@ -945,13 +1037,11 @@ public class Chunk implements IChunkAccess {
+@@ -994,13 +1084,11 @@ public class Chunk implements IChunkAccess {
          return false;
      }
  
@@ -883,7 +873,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          return this.d;
      }
  
-@@ -963,8 +1053,7 @@ public class Chunk implements IChunkAccess {
+@@ -1012,8 +1100,7 @@ public class Chunk implements IChunkAccess {
          return this.world;
      }
  
@@ -893,7 +883,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          return Collections.unmodifiableSet(this.heightMap.entrySet());
      }
  
-@@ -976,101 +1065,88 @@ public class Chunk implements IChunkAccess {
+@@ -1025,101 +1112,88 @@ public class Chunk implements IChunkAccess {
          return this.entitySlices;
      }
  
@@ -1020,7 +1010,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          this.inhabitedTime = i;
      }
  
-@@ -1085,7 +1161,8 @@ public class Chunk implements IChunkAccess {
+@@ -1134,7 +1208,8 @@ public class Chunk implements IChunkAccess {
                      Short oshort = (Short) shortlistiterator.next();
                      BlockPosition blockposition = ProtoChunk.a(oshort, i, chunkcoordintpair);
                      IBlockData iblockdata = this.getType(blockposition);
@@ -1030,7 +1020,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
  
                      this.world.setTypeAndData(blockposition, iblockdata1, 20);
                  }
-@@ -1107,8 +1184,7 @@ public class Chunk implements IChunkAccess {
+@@ -1156,8 +1231,7 @@ public class Chunk implements IChunkAccess {
          this.i.a(this);
      }
  
@@ -1040,7 +1030,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          TileEntity tileentity;
  
          if ("DUMMY".equals(nbttagcompound.getString("id"))) {
-@@ -1118,7 +1194,9 @@ public class Chunk implements IChunkAccess {
+@@ -1167,7 +1241,9 @@ public class Chunk implements IChunkAccess {
                  tileentity = ((ITileEntity) block).createTile(this.world);
              } else {
                  tileentity = null;
@@ -1051,7 +1041,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              }
          } else {
              tileentity = TileEntity.create(nbttagcompound);
-@@ -1128,27 +1206,27 @@ public class Chunk implements IChunkAccess {
+@@ -1177,27 +1253,27 @@ public class Chunk implements IChunkAccess {
              tileentity.setLocation(this.world, blockposition);
              this.a(tileentity);
          } else {
@@ -1087,7 +1077,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              this.o = TickListEmpty.b();
          } else if (this.o instanceof TickListChunk) {
              this.world.getBlockTickList().a(((TickListChunk) this.o).b());
-@@ -1156,9 +1234,10 @@ public class Chunk implements IChunkAccess {
+@@ -1205,9 +1281,10 @@ public class Chunk implements IChunkAccess {
          }
  
          if (this.p instanceof ProtoChunkTickList) {
@@ -1101,7 +1091,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
              this.p = TickListEmpty.b();
          } else if (this.p instanceof TickListChunk) {
              this.world.getFluidTickList().a(((TickListChunk) this.p).b());
-@@ -1169,19 +1248,20 @@ public class Chunk implements IChunkAccess {
+@@ -1218,19 +1295,20 @@ public class Chunk implements IChunkAccess {
  
      public void a(WorldServer worldserver) {
          if (this.o == TickListEmpty.<Block>b()) { // CraftBukkit - decompile error
@@ -1126,7 +1116,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          return ChunkStatus.FULL;
      }
  
-@@ -1193,13 +1273,11 @@ public class Chunk implements IChunkAccess {
+@@ -1242,13 +1320,11 @@ public class Chunk implements IChunkAccess {
          this.u = supplier;
      }
  
@@ -1142,7 +1132,7 @@ index 8b8e1d900e1a5e6c4418fc3822afb6de4ba87983..2bdfd89def08c05530284f9d76d4fe09
          this.x = flag;
          this.setNeedsSaving(true);
      }
-@@ -1208,6 +1286,52 @@ public class Chunk implements IChunkAccess {
+@@ -1257,6 +1333,52 @@ public class Chunk implements IChunkAccess {
  
          IMMEDIATE, QUEUED, CHECK;
  
@@ -1359,7 +1349,7 @@ index 426221f7c329647444442b8fbe229857167a1088..1c3480486221606341c4abfd19e29bf2
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index d49c45ce7fa14b28c28f8f1daa713f394be4de95..695bed49926cf6e96a696e8ed2f489d311dc553a 100644
+index 247e8bdb14a9e18bf97a6dfd2d87acf81fffe79b..f02d447bd4d8d11bd686abd52a0761b38d342230 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/EntityPlayer.java
 @@ -4,20 +4,8 @@ import com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent;
@@ -1414,7 +1404,7 @@ index d49c45ce7fa14b28c28f8f1daa713f394be4de95..695bed49926cf6e96a696e8ed2f489d3
      public String locale = null; // CraftBukkit - lowercase // Paper - default to null
      public PlayerConnection playerConnection;
      public final MinecraftServer server;
-@@ -397,69 +404,77 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -402,69 +409,77 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
  
      @Override
      public void tick() {
@@ -1539,7 +1529,7 @@ index d49c45ce7fa14b28c28f8f1daa713f394be4de95..695bed49926cf6e96a696e8ed2f489d3
      }
  
      public void playerTick() {
-@@ -651,7 +666,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -656,7 +671,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
                  ichatbasecomponent = org.bukkit.craftbukkit.util.CraftChatMessage.fromStringOrNull(deathMessage);
              }
  
@@ -1548,7 +1538,7 @@ index d49c45ce7fa14b28c28f8f1daa713f394be4de95..695bed49926cf6e96a696e8ed2f489d3
                  if (!future.isSuccess()) {
                      boolean flag1 = true;
                      String s = ichatbasecomponent.a(256);
-@@ -2001,4 +2016,5 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -2006,4 +2021,5 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
          return (CraftPlayer) super.getBukkitEntity();
      }
      // CraftBukkit end
@@ -5200,7 +5190,7 @@ index 9d0e8c2d43ba56d53bc30c0a3e2d7d170d8be474..6a7258e173557658cdf5e520c3254c60
      public Fluid getFluid(BlockPosition blockposition) {
          return this.x(blockposition).getFluid(blockposition);
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index 2b5d0ecd0d520b28a06483f01473a7c080bef808..092644decc0808b448f1a032b16fc7d8836690ba 100644
+index 6d34f487eaaa022d3884ba44fe3a962cd914ecb4..71e1c23f711a4222a5f6c8416c5f122a87b4ffb0 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
 @@ -1,37 +1,34 @@
@@ -5497,7 +5487,7 @@ index 0000000000000000000000000000000000000000..9090a5d7df77ea628d4c2fddc36ca37b
 +
 +}
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index b5ffd144139babb6619c1916ef96f4156be8669a..16ef018a03d951eb522230685fc0f1d3e7bf6a52 100644
+index 516a0164809656af85f2880da7de9a403ed1c958..65491916241bc510c13a07b3712f8500c3c2cb29 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 @@ -1,6 +1,5 @@

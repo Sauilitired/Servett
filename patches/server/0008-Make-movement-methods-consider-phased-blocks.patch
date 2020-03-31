@@ -5,7 +5,7 @@ Subject: [PATCH] Make movement methods consider phased blocks
 
 
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c2f0403a1 100644
+index 96d091e4bf2a939e0effe047161a095d1bb073de..a8fbe3e0b8cd9b74fb74502045ddf7447a312b54 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -1,53 +1,54 @@
@@ -88,7 +88,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
  // CraftBukkit end
  
  public abstract class Entity implements INamableTileEntity, ICommandListener, KeyedObject { // Paper
-@@ -712,6 +713,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -743,6 +744,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
                  this.recalcPosition();
              }
  
@@ -97,7 +97,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
              this.world.getMethodProfiler().exit();
              this.world.getMethodProfiler().enter("rest");
              this.positionChanged = !MathHelper.b(vec3d.x, vec3d1.x) || !MathHelper.b(vec3d.z, vec3d1.z);
-@@ -719,7 +722,15 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -750,7 +753,15 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              this.onGround = this.v && vec3d.y < 0.0D;
              this.w = this.positionChanged || this.v;
              BlockPosition blockposition = this.ag();
@@ -114,7 +114,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
  
              this.a(vec3d1.y, this.onGround, iblockdata, blockposition);
              Vec3D vec3d2 = this.getMot();
-@@ -845,10 +856,27 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -883,10 +894,27 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          int k = MathHelper.floor(this.locZ);
          BlockPosition blockposition = new BlockPosition(i, j, k);
  
@@ -145,7 +145,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
  
              if (block.a(TagsBlock.FENCES) || block.a(TagsBlock.WALLS) || block instanceof BlockFenceGate) {
                  return blockposition1;
-@@ -866,7 +894,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -904,7 +932,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
  
      protected float ai() {
@@ -163,7 +163,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
          float f = block.m();
  
          return block != Blocks.WATER && block != Blocks.BUBBLE_COLUMN ? ((double) f == 1.0D ? this.world.getType(this.aj()).getBlock().m() : f) : f;
-@@ -962,13 +999,21 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1000,13 +1037,21 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          if ((!flag || !flag1) && (!flag || !flag2) && (!flag1 || !flag2)) {
              StreamAccumulator<VoxelShape> streamaccumulator1 = new StreamAccumulator<>(Stream.concat(streamaccumulator.a(), world.b(entity, axisalignedbb.a(vec3d))));
  
@@ -187,7 +187,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
          double d0 = vec3d.x;
          double d1 = vec3d.y;
          double d2 = vec3d.z;
-@@ -1002,14 +1047,20 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1040,14 +1085,20 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
          return new Vec3D(d0, d1, d2);
      }
@@ -209,7 +209,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
              if (d1 != 0.0D) {
                  axisalignedbb = axisalignedbb.d(0.0D, d1, 0.0D);
              }
-@@ -1018,25 +1069,26 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1056,25 +1107,26 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          boolean flag = Math.abs(d0) < Math.abs(d2);
  
          if (flag && d2 != 0.0D) {
@@ -239,7 +239,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
  
      protected float ak() {
          return (float) ((int) this.C + 1);
-@@ -1062,6 +1114,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1100,6 +1152,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
  
      protected void checkBlockCollisions() {
@@ -248,7 +248,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
          AxisAlignedBB axisalignedbb = this.getBoundingBox();
          BlockPosition.PooledBlockPosition blockposition_pooledblockposition = BlockPosition.PooledBlockPosition.d(axisalignedbb.minX + 0.001D, axisalignedbb.minY + 0.001D, axisalignedbb.minZ + 0.001D);
          Throwable throwable = null;
-@@ -1080,7 +1134,15 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1118,7 +1172,15 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
                              for (int j = blockposition_pooledblockposition.getY(); j <= blockposition_pooledblockposition1.getY(); ++j) {
                                  for (int k = blockposition_pooledblockposition.getZ(); k <= blockposition_pooledblockposition1.getZ(); ++k) {
                                      blockposition_pooledblockposition2.d(i, j, k);
@@ -265,7 +265,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
  
                                      try {
                                          iblockdata.a(this.world, blockposition_pooledblockposition2, this);
-@@ -1277,7 +1339,15 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1315,7 +1377,15 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
  
      private boolean l() {
@@ -282,7 +282,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
      }
  
      public boolean isInWaterOrRain() {
-@@ -1382,7 +1452,14 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1420,7 +1490,14 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          int j = MathHelper.floor(this.locY() - 0.20000000298023224D);
          int k = MathHelper.floor(this.locZ());
          BlockPosition blockposition = new BlockPosition(i, j, k);
@@ -298,7 +298,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
  
          if (iblockdata.j() != EnumRenderType.INVISIBLE) {
              Vec3D vec3d = this.getMot();
-@@ -2092,7 +2169,17 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2130,7 +2207,17 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
                      if (blockposition_pooledblockposition.getX() != k || blockposition_pooledblockposition.getY() != j || blockposition_pooledblockposition.getZ() != l) {
                          blockposition_pooledblockposition.d(k, j, l);
@@ -317,7 +317,7 @@ index 223ad3965ce0f44e37dd5ef6dca50046e88997fd..f2ec4192948bb5f589802763b395f54c
                              boolean flag = true;
  
                              return flag;
-@@ -2606,7 +2693,17 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2644,7 +2731,17 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              EnumDirection enumdirection1 = aenumdirection[j];
  
              blockposition_mutableblockposition.g(blockposition).c(enumdirection1);
